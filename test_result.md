@@ -102,7 +102,20 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the Idolcode landing page comprehensively including page structure, interactive elements, responsive design, visual design, and content verification"
+user_problem_statement: "Test the Idolcode landing page comprehensively including page structure, interactive elements, responsive design, visual design, and content verification. Added search dropdown functionality with Codeforces API integration and profile page navigation."
+
+backend:
+  - task: "Codeforces User Search API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Implemented GET /api/coders/search endpoint that integrates with Codeforces API. Returns up to 5 coder suggestions with handle, rating, rank, and avatar. Tested with 'tourist' query and returned valid data."
 
 frontend:
   - task: "Navbar Component"
