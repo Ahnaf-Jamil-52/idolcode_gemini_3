@@ -144,7 +144,7 @@ export const HeroSection = () => {
               onSubmit={handleSearch}
               className="max-w-xl mx-auto lg:mx-0 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-450"
             >
-              <div className="relative group">
+              <div className="relative group" ref={dropdownRef}>
                 <div className="absolute inset-0 bg-gradient-to-r from-primary/30 to-accent/30 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                 <div className="relative flex items-center glass-card rounded-2xl p-2 border-2 border-border hover:border-primary/50 transition-colors">
                   <Search className="w-5 h-5 text-muted-foreground ml-4" />
@@ -162,8 +162,58 @@ export const HeroSection = () => {
                     Search
                   </Button>
                 </div>
+
+                {/* Dropdown Suggestions */}
+                {showDropdown && (
+                  <div className="absolute z-50 w-full mt-2 glass-card rounded-2xl border-2 border-primary/30 overflow-hidden shadow-2xl">
+                    {isLoading ? (
+                      <div className="p-4 text-center text-muted-foreground">
+                        Loading suggestions...
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-border/50">
+                        {suggestions.map((coder, index) => (
+                          <div
+                            key={index}
+                            onClick={() => handleSuggestionClick(coder)}
+                            className="flex items-center justify-between p-4 hover:bg-primary/10 cursor-pointer transition-colors group/item"
+                          >
+                            <div className="flex items-center space-x-3 flex-1">
+                              <div className="w-2 h-2 rounded-full bg-primary group-hover/item:scale-150 transition-transform"></div>
+                              <span className="font-medium text-foreground group-hover/item:text-primary transition-colors">
+                                {coder.handle}
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              {coder.rank && (
+                                <span className="text-xs text-muted-foreground px-2 py-1 rounded-md bg-secondary/50">
+                                  {coder.rank}
+                                </span>
+                              )}
+                              {coder.rating && (
+                                <span className={`font-bold text-sm px-3 py-1 rounded-lg border-2 ${getRatingColor(coder.rating)} bg-background/50`}>
+                                  {coder.rating}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </form>
+
+            {/* Confirmation Modal */}
+            {selectedCoder && (
+              <ConfirmationModal
+                isOpen={showConfirmModal}
+                onClose={() => setShowConfirmModal(false)}
+                onConfirm={handleConfirmSelection}
+                coderHandle={selectedCoder.handle}
+              />
+            )}
 
             {/* Quick Stats */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-6 text-sm animate-in fade-in slide-in-from-bottom-12 duration-700 delay-600">
