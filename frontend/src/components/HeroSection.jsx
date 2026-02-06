@@ -9,6 +9,61 @@ import ConfirmationModal from './ConfirmationModal';
 
 export const HeroSection = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedCoder, setSelectedCoder] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const dropdownRef = useRef(null);
+  const navigate = useNavigate();
+
+  const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
+
+  // Handle click outside dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Fetch suggestions when search query changes
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (searchQuery.trim().length < 2) {
+        setSuggestions([]);
+        setShowDropdown(false);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const response = await axios.get(`${BACKEND_URL}/api/coders/search`, {
+          params: {
+            query: searchQuery,
+            limit: 5
+          }
+        });
+        setSuggestions(response.data);
+        setShowDropdown(response.data.length > 0);
+      } catch (error) {
+        console.error('Error fetching suggestions:', error);
+        setSuggestions([]);
+        setShowDropdown(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    const timeoutId = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, BACKEND_URL]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -18,6 +73,30 @@ export const HeroSection = () => {
     } else {
       toast.error('Please enter a coder username');
     }
+  };
+
+  const handleSuggestionClick = (coder) => {
+    setSelectedCoder(coder);
+    setShowDropdown(false);
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmSelection = () => {
+    setShowConfirmModal(false);
+    toast.success(`${selectedCoder.handle} selected as your coding idol!`);
+    // Navigate to profile page
+    navigate(`/profile/${selectedCoder.handle}`);
+  };
+
+  const getRatingColor = (rating) => {
+    if (!rating) return 'text-gray-400';
+    if (rating >= 2400) return 'text-red-500';
+    if (rating >= 2100) return 'text-orange-500';
+    if (rating >= 1900) return 'text-purple-500';
+    if (rating >= 1600) return 'text-blue-500';
+    if (rating >= 1400) return 'text-cyan-500';
+    if (rating >= 1200) return 'text-green-500';
+    return 'text-gray-400';
   };
 
   return (
