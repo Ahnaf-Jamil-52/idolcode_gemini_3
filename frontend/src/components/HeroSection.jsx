@@ -107,7 +107,8 @@ export const HeroSection = () => {
                 <img
                   src="https://static.prod-images.emergentagent.com/jobs/6100a3e9-50bd-415e-b52f-278e95a062af/images/a97cbcef4f6b4fec35bee68ae3b79a5e9d0324a1db31bac16216f84e8e7c4aff.png"
                   alt="Idolcode Duck Mascot with CP on visor"
-                  className="w-64 sm:w-80 lg:w-96 h-auto drop-shadow-2xl"
+                  className="w-64 sm:w-80 lg:w-96 h-auto drop-shadow-2xl relative z-10"
+                  style={{ mixBlendMode: 'normal' }}
                 />
               </div>
 
