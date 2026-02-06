@@ -105,8 +105,8 @@ export const HeroSection = () => {
               {/* Mascot */}
               <div className="relative animate-float">
                 <img
-                  src="https://static.prod-images.emergentagent.com/jobs/6100a3e9-50bd-415e-b52f-278e95a062af/images/92b590459d2216c949e34a57908649fb5fd4a7b4d2093b871267187cf028db56.png"
-                  alt="Idolcode Duck Mascot"
+                  src="https://static.prod-images.emergentagent.com/jobs/6100a3e9-50bd-415e-b52f-278e95a062af/images/a97cbcef4f6b4fec35bee68ae3b79a5e9d0324a1db31bac16216f84e8e7c4aff.png"
+                  alt="Idolcode Duck Mascot with CP on visor"
                   className="w-64 sm:w-80 lg:w-96 h-auto drop-shadow-2xl"
                 />
               </div>
