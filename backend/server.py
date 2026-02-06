@@ -39,10 +39,86 @@ class StatusCheck(BaseModel):
 class StatusCheckCreate(BaseModel):
     client_name: str
 
+class CoderSuggestion(BaseModel):
+    handle: str
+    rating: Optional[int] = None
+    rank: Optional[str] = None
+    maxRating: Optional[int] = None
+    maxRank: Optional[str] = None
+    avatar: Optional[str] = None
+
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
     return {"message": "Hello World"}
+
+@api_router.get("/coders/search", response_model=List[CoderSuggestion])
+async def search_coders(query: str, limit: int = 5):
+    """
+    Search for Codeforces users by handle
+    """
+    if not query or len(query.strip()) < 2:
+        return []
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Search for users whose handle starts with the query
+            response = await client.get(
+                f"https://codeforces.com/api/user.info?handles={query}"
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "OK":
+                    users = data.get("result", [])
+                    suggestions = []
+                    for user in users[:limit]:
+                        suggestions.append(CoderSuggestion(
+                            handle=user.get("handle", ""),
+                            rating=user.get("rating"),
+                            rank=user.get("rank"),
+                            maxRating=user.get("maxRating"),
+                            maxRank=user.get("maxRank"),
+                            avatar=user.get("avatar", "")
+                        ))
+                    return suggestions
+            
+            # If exact match fails, try to get popular users
+            # Fallback: return some popular coders that match the query
+            popular_coders = [
+                "tourist", "Benq", "Petr", "Radewoosh", "mnbvmar",
+                "scott_wu", "ksun48", "Errichto", "jiangly", "Um_nik"
+            ]
+            
+            matching = [h for h in popular_coders if query.lower() in h.lower()]
+            if matching:
+                handles_str = ";".join(matching[:limit])
+                response = await client.get(
+                    f"https://codeforces.com/api/user.info?handles={handles_str}"
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("status") == "OK":
+                        users = data.get("result", [])
+                        suggestions = []
+                        for user in users:
+                            suggestions.append(CoderSuggestion(
+                                handle=user.get("handle", ""),
+                                rating=user.get("rating"),
+                                rank=user.get("rank"),
+                                maxRating=user.get("maxRating"),
+                                maxRank=user.get("maxRank"),
+                                avatar=user.get("avatar", "")
+                            ))
+                        return suggestions
+            
+            return []
+            
+    except Exception as e:
+        logger.error(f"Error searching coders: {str(e)}")
+        # Return empty list instead of raising exception for better UX
+        return []
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
