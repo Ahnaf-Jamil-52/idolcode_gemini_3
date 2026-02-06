@@ -321,16 +321,23 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Navbar Component"
+    - "Codeforces User Search API"
+    - "Search Dropdown with Suggestions"
+    - "Confirmation Modal"
+    - "Profile Page"
+    - "Routing Setup"
     - "Hero Section"
+    - "Navbar Component"
     - "Pricing Section"
     - "FAQ Section"
     - "CTA Section"
     - "Responsive Design"
   stuck_tasks: []
-  test_all: true
+  test_all: false
   test_priority: "high_first"
 
 agent_communication:
   - agent: "testing"
     message: "Starting comprehensive testing of Idolcode landing page. Will test all sections, interactive elements, responsiveness, and visual design as requested. Testing will focus on high-priority components first, then proceed to medium priority items."
+  - agent: "main"
+    message: "Implemented search dropdown functionality with Codeforces API integration. Features: 1) Real-time search suggestions with debouncing (300ms), 2) Dropdown shows coder handle on left and rating in colored rectangle on right, 3) Rating colors match Codeforces ranks, 4) Confirmation modal for selecting coding idol, 5) Profile page with dynamic routing, 6) Backend API endpoint /api/coders/search tested successfully with 'tourist' query. Ready for comprehensive testing of new features."
