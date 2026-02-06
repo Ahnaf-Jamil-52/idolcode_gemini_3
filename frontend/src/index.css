@@ -2,74 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
 body {
     margin: 0;
-    font-family:
-        -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-        "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-        sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
 
 code {
-    font-family:
-        source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+    font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
 }
 
 @layer base {
     :root {
-        --background: 0 0% 100%;
-        --foreground: 0 0% 3.9%;
-        --card: 0 0% 100%;
-        --card-foreground: 0 0% 3.9%;
-        --popover: 0 0% 100%;
-        --popover-foreground: 0 0% 3.9%;
-        --primary: 0 0% 9%;
-        --primary-foreground: 0 0% 98%;
-        --secondary: 0 0% 96.1%;
-        --secondary-foreground: 0 0% 9%;
-        --muted: 0 0% 96.1%;
-        --muted-foreground: 0 0% 45.1%;
-        --accent: 0 0% 96.1%;
-        --accent-foreground: 0 0% 9%;
-        --destructive: 0 84.2% 60.2%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 89.8%;
-        --input: 0 0% 89.8%;
-        --ring: 0 0% 3.9%;
-        --chart-1: 12 76% 61%;
-        --chart-2: 173 58% 39%;
-        --chart-3: 197 37% 24%;
-        --chart-4: 43 74% 66%;
-        --chart-5: 27 87% 67%;
-        --radius: 0.5rem;
-    }
-    .dark {
-        --background: 0 0% 3.9%;
-        --foreground: 0 0% 98%;
-        --card: 0 0% 3.9%;
-        --card-foreground: 0 0% 98%;
-        --popover: 0 0% 3.9%;
-        --popover-foreground: 0 0% 98%;
-        --primary: 0 0% 98%;
-        --primary-foreground: 0 0% 9%;
-        --secondary: 0 0% 14.9%;
-        --secondary-foreground: 0 0% 98%;
-        --muted: 0 0% 14.9%;
-        --muted-foreground: 0 0% 63.9%;
-        --accent: 0 0% 14.9%;
-        --accent-foreground: 0 0% 98%;
-        --destructive: 0 62.8% 30.6%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 0 0% 14.9%;
-        --input: 0 0% 14.9%;
-        --ring: 0 0% 83.1%;
-        --chart-1: 220 70% 50%;
-        --chart-2: 160 60% 45%;
-        --chart-3: 30 80% 55%;
-        --chart-4: 280 65% 60%;
-        --chart-5: 340 75% 55%;
+        /* Futuristic Tech Color Palette - HSL Format */
+        --background: 220 20% 6%;  /* Deep dark blue-gray */
+        --foreground: 210 40% 98%;  /* Crisp white with slight cool tint */
+        
+        --card: 220 18% 10%;  /* Slightly lighter than background */
+        --card-foreground: 210 40% 98%;
+        
+        --popover: 220 18% 12%;
+        --popover-foreground: 210 40% 98%;
+        
+        /* Primary: Cyan/Teal - Futuristic tech accent */
+        --primary: 189 95% 52%;  /* Bright cyan */
+        --primary-foreground: 220 20% 6%;
+        --primary-glow: 189 95% 62%;  /* Lighter cyan for glow effects */
+        
+        /* Secondary: Deep purple-blue */
+        --secondary: 250 60% 25%;
+        --secondary-foreground: 210 40% 98%;
+        
+        /* Accent: Purple for highlights */
+        --accent: 270 70% 60%;
+        --accent-foreground: 220 20% 6%;
+        
+        --muted: 220 15% 20%;
+        --muted-foreground: 215 20% 65%;
+        
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 210 40% 98%;
+        
+        --border: 220 15% 18%;
+        --input: 220 15% 18%;
+        --ring: 189 95% 52%;
+        
+        --chart-1: 189 95% 52%;
+        --chart-2: 270 70% 60%;
+        --chart-3: 330 80% 55%;
+        --chart-4: 110 70% 50%;
+        --chart-5: 40 90% 55%;
+        
+        --radius: 0.75rem;
+        
+        /* Custom Design Tokens - Futuristic Minimal */
+        --gradient-primary: linear-gradient(135deg, hsl(189 95% 52% / 0.15), hsl(270 70% 60% / 0.15));
+        --gradient-hero: linear-gradient(180deg, hsl(220 20% 6%), hsl(220 18% 10%));
+        --gradient-card: linear-gradient(135deg, hsl(220 18% 10% / 0.8), hsl(220 15% 12% / 0.8));
+        
+        --shadow-glow-cyan: 0 0 40px hsl(189 95% 52% / 0.3), 0 0 80px hsl(189 95% 52% / 0.15);
+        --shadow-glow-purple: 0 0 40px hsl(270 70% 60% / 0.3), 0 0 80px hsl(270 70% 60% / 0.15);
+        --shadow-card: 0 8px 32px hsl(220 20% 4% / 0.5);
+        --shadow-elegant: 0 10px 30px -10px hsl(189 95% 52% / 0.3);
+        
+        --transition-smooth: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        --transition-bounce: 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        
+        /* Glass Effect */
+        --glass-bg: hsl(220 18% 15% / 0.7);
+        --glass-border: hsl(210 40% 98% / 0.1);
     }
 }
 
@@ -79,7 +83,85 @@ code {
     }
     body {
         @apply bg-background text-foreground;
+        background: linear-gradient(180deg, hsl(220 20% 6%), hsl(220 18% 9%));
+        min-height: 100vh;
     }
+    
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Space Grotesk', sans-serif;
+    }
+}
+
+/* Custom scrollbar for futuristic feel */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.5);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.8);
+}
+
+/* Smooth transitions */
+button, a, input {
+    transition: var(--transition-smooth);
+}
+
+/* Glow animation */
+@keyframes glow-pulse {
+    0%, 100% {
+        filter: drop-shadow(0 0 8px hsl(189 95% 52% / 0.4));
+    }
+    50% {
+        filter: drop-shadow(0 0 20px hsl(189 95% 52% / 0.6));
+    }
+}
+
+.animate-glow {
+    animation: glow-pulse 3s ease-in-out infinite;
+}
+
+/* Float animation for mascot */
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-20px);
+    }
+}
+
+.animate-float {
+    animation: float 3s ease-in-out infinite;
+}
+
+/* Shimmer effect */
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.animate-shimmer {
+    animation: shimmer 3s linear infinite;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        hsl(189 95% 52% / 0.1) 50%,
+        transparent 100%
+    );
+    background-size: 1000px 100%;
 }
 
 @layer base {

@@ -1,34 +1,43 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* Additional app-specific styles */
+.hero-pattern {
+  background-image: 
+    radial-gradient(circle at 25% 25%, hsl(189 95% 52% / 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, hsl(270 70% 60% / 0.05) 0%, transparent 50%);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.grid-pattern {
+  background-image: 
+    linear-gradient(hsl(210 40% 98% / 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(210 40% 98% / 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Glass card effect */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
 }
 
-.App-link {
-    color: #61dafb;
+/* Futuristic border glow */
+.border-glow {
+  position: relative;
+  border: 1px solid hsl(var(--border));
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.border-glow::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(45deg, hsl(189 95% 52% / 0.3), hsl(270 70% 60% / 0.3));
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: -1;
+  filter: blur(8px);
+}
+
+.border-glow:hover::before {
+  opacity: 1;
 }
