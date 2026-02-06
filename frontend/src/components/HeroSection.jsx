@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Search, TrendingUp, Users } from 'lucide-react';
 import { toast } from 'sonner';
+import axios from 'axios';
+import ConfirmationModal from './ConfirmationModal';
 
 export const HeroSection = () => {
   const [searchQuery, setSearchQuery] = useState('');
