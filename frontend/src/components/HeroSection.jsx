@@ -165,7 +165,7 @@ export const HeroSection = () => {
 
                 {/* Dropdown Suggestions */}
                 {showDropdown && (
-                  <div className="absolute z-50 w-full mt-2 glass-card rounded-2xl border-2 border-primary/30 overflow-hidden shadow-2xl">
+                  <div className="absolute z-50 w-full mt-2 glass-card rounded-2xl border-2 border-primary/30 overflow-hidden shadow-2xl backdrop-blur-xl">
                     {isLoading ? (
                       <div className="p-4 text-center text-muted-foreground">
                         Loading suggestions...
@@ -176,22 +176,22 @@ export const HeroSection = () => {
                           <div
                             key={index}
                             onClick={() => handleSuggestionClick(coder)}
-                            className="flex items-center justify-between p-4 hover:bg-primary/10 cursor-pointer transition-colors group/item"
+                            className="flex items-center justify-between p-4 hover:bg-primary/10 cursor-pointer transition-all group/item"
                           >
                             <div className="flex items-center space-x-3 flex-1">
                               <div className="w-2 h-2 rounded-full bg-primary group-hover/item:scale-150 transition-transform"></div>
-                              <span className="font-medium text-foreground group-hover/item:text-primary transition-colors">
+                              <span className="font-semibold text-foreground group-hover/item:text-primary transition-colors text-base">
                                 {coder.handle}
                               </span>
                             </div>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-3">
                               {coder.rank && (
-                                <span className="text-xs text-muted-foreground px-2 py-1 rounded-md bg-secondary/50">
+                                <span className="text-xs text-muted-foreground px-3 py-1.5 rounded-lg bg-secondary/70 border border-border/50">
                                   {coder.rank}
                                 </span>
                               )}
                               {coder.rating && (
-                                <span className={`font-bold text-sm px-3 py-1 rounded-lg border-2 ${getRatingColor(coder.rating)} bg-background/50`}>
+                                <span className={`font-bold text-base px-4 py-1.5 rounded-lg border-2 ${getRatingColor(coder.rating)} bg-background/80 shadow-lg group-hover/item:scale-105 transition-transform`}>
                                   {coder.rating}
                                 </span>
                               )}
