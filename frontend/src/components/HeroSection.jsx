@@ -85,9 +85,15 @@ export const HeroSection = () => {
 
   const handleConfirmSelection = () => {
     setShowConfirmModal(false);
+    selectIdol(selectedCoder.handle, selectedCoder);
     toast.success(`${selectedCoder.handle} selected as your coding idol!`);
-    // Navigate to profile page
-    navigate(`/profile/${selectedCoder.handle}`);
+    
+    // If user is logged in, go to dashboard; otherwise go to login first
+    if (isAuthenticated) {
+      navigate(`/dashboard/${selectedCoder.handle}`);
+    } else {
+      navigate('/login', { state: { returnTo: `/dashboard/${selectedCoder.handle}` } });
+    }
   };
 
   const getRatingColor = (rating) => {
