@@ -6,6 +6,7 @@ import { Search, TrendingUp, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import ConfirmationModal from './ConfirmationModal';
+import { useAuth } from '../context/AuthContext';
 
 export const HeroSection = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,6 +17,7 @@ export const HeroSection = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+  const { isAuthenticated, selectIdol } = useAuth();
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
