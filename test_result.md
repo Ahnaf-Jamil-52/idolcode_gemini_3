@@ -459,11 +459,9 @@ metadata:
 
 test_plan:
   current_focus:
-    - "User Info API"
-    - "User Stats API"
-    - "Idol Journey API"
-    - "User Solved Problems API"
-    - "Compare Users API"
+    - "Backend Deployment Health Check"
+    - "Status Endpoint Pagination"
+    - "Status Check Creation"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
