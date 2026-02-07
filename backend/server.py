@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,7 +6,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
 import httpx
@@ -46,6 +46,59 @@ class CoderSuggestion(BaseModel):
     maxRating: Optional[int] = None
     maxRank: Optional[str] = None
     avatar: Optional[str] = None
+
+class UserInfo(BaseModel):
+    handle: str
+    rating: Optional[int] = None
+    rank: Optional[str] = None
+    maxRating: Optional[int] = None
+    maxRank: Optional[str] = None
+    avatar: Optional[str] = None
+    titlePhoto: Optional[str] = None
+    contribution: Optional[int] = None
+    friendOfCount: Optional[int] = None
+    registrationTimeSeconds: Optional[int] = None
+
+class UserStats(BaseModel):
+    handle: str
+    rating: Optional[int] = None
+    rank: Optional[str] = None
+    maxRating: Optional[int] = None
+    maxRank: Optional[str] = None
+    problemsSolved: int = 0
+    contestsParticipated: int = 0
+    contestWins: int = 0  # Times finished in top 10
+
+class ProblemInfo(BaseModel):
+    contestId: Optional[int] = None
+    index: str = ""
+    name: str = ""
+    rating: Optional[int] = None
+    tags: List[str] = []
+    problemId: str = ""  # Format: contestId + index (e.g., "786A")
+    solvedAt: Optional[int] = None  # Timestamp when solved
+    ratingAtSolve: Optional[int] = None  # User's rating when they solved this
+    wasContestSolve: bool = False  # If solved during a contest
+
+class IdolJourney(BaseModel):
+    problems: List[ProblemInfo] = []
+    totalProblems: int = 0
+    hasMore: bool = False
+
+class ComparisonData(BaseModel):
+    user: UserStats
+    idol: UserStats
+    progressPercent: float = 0.0
+    userAhead: bool = False
+
+class UserSession(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    userHandle: str
+    idolHandle: str
+    solvedProblems: List[str] = []  # List of problemIds user has solved from idol's journey
+    currentProgress: int = 0  # Index of last solved problem in journey
+    createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updatedAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
