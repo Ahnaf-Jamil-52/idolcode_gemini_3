@@ -206,7 +206,7 @@ const ProblemNode = ({
 export const Dashboard = () => {
   const { handle: idolHandle } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, selectIdol } = useAuth();
+  const { user, isAuthenticated, isLoading: isAuthLoading, selectIdol } = useAuth();
   
   // State
   const [comparison, setComparison] = useState(null);
@@ -222,13 +222,13 @@ export const Dashboard = () => {
   const LIMIT = 100;
   const VISIBLE_NODES = 5;
   
-  // Check if user is logged in
+  // Check if user is logged in (wait for auth to finish loading)
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthLoading && !isAuthenticated) {
       toast.error('Please login first');
       navigate('/login', { state: { returnTo: `/dashboard/${idolHandle}` } });
     }
-  }, [isAuthenticated, navigate, idolHandle]);
+  }, [isAuthenticated, isAuthLoading, navigate, idolHandle]);
   
   // Fetch comparison data
   useEffect(() => {
