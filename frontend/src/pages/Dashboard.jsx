@@ -393,6 +393,18 @@ export const Dashboard = () => {
   // Check if comparison data is loaded (not just !isLoadingComparison)
   const comparisonLoaded = !isLoadingComparison && comparison !== null;
   
+  // Show loading if auth is still loading
+  if (isAuthLoading) {
+    return (
+      <section className="relative min-h-screen flex items-center justify-center">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="text-xl">Loading...</span>
+        </div>
+      </section>
+    );
+  }
+  
   if (!isAuthenticated) {
     return null;
   }
