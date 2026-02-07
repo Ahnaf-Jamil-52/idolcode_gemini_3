@@ -389,6 +389,9 @@ export const Dashboard = () => {
   const isAhead = comparison?.userAhead || false;
   const idolRank = comparison?.idol?.rank || 'Unknown';
   
+  // Check if comparison data is loaded (not just !isLoadingComparison)
+  const comparisonLoaded = !isLoadingComparison && comparison !== null;
+  
   if (!isAuthenticated) {
     return null;
   }
