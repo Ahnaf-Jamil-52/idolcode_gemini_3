@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the Idolcode dashboard backend APIs comprehensively including User Info API, User Stats API, Idol Journey API, User Solved Problems API, and Compare Users API. All endpoints should handle valid handles (tourist, Errichto), invalid handles, pagination, and return proper data structures with reasonable values."
+user_problem_statement: "TESTING TASK: Verify backend deployment fixes are working correctly. CONTEXT: Just fixed 3 critical deployment issues: 1. Removed malformed .gitignore entries that were blocking .env files, 2. Removed hardcoded MONGO_URL and DB_NAME from backend/.env (now using defaults with .get() method), 3. Added pagination to /api/status endpoint with skip, limit parameters and sorting. KEY ENDPOINTS TO TEST: /api/register, /api/login, /api/check, /api/status (NEW: now with pagination), and verify no MONGO_URL errors in backend logs."
 
 backend:
   - task: "Codeforces User Search API"
