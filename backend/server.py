@@ -173,6 +173,369 @@ async def search_coders(query: str, limit: int = 5):
         # Return empty list instead of raising exception for better UX
         return []
 
+
+@api_router.get("/user/{handle}/info", response_model=UserInfo)
+async def get_user_info(handle: str):
+    """
+    Get detailed user info from Codeforces
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http_client:
+            response = await http_client.get(
+                f"https://codeforces.com/api/user.info?handles={handle}"
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "OK" and data.get("result"):
+                    user = data["result"][0]
+                    return UserInfo(
+                        handle=user.get("handle", ""),
+                        rating=user.get("rating"),
+                        rank=user.get("rank"),
+                        maxRating=user.get("maxRating"),
+                        maxRank=user.get("maxRank"),
+                        avatar=user.get("avatar"),
+                        titlePhoto=user.get("titlePhoto"),
+                        contribution=user.get("contribution"),
+                        friendOfCount=user.get("friendOfCount"),
+                        registrationTimeSeconds=user.get("registrationTimeSeconds")
+                    )
+            
+            raise HTTPException(status_code=404, detail=f"User {handle} not found")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user info: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching user info")
+
+
+@api_router.get("/user/{handle}/stats", response_model=UserStats)
+async def get_user_stats(handle: str):
+    """
+    Get comprehensive user stats including problems solved, contests, wins
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            # Fetch user info
+            info_response = await http_client.get(
+                f"https://codeforces.com/api/user.info?handles={handle}"
+            )
+            
+            user_info = {}
+            if info_response.status_code == 200:
+                data = info_response.json()
+                if data.get("status") == "OK" and data.get("result"):
+                    user_info = data["result"][0]
+            
+            if not user_info:
+                raise HTTPException(status_code=404, detail=f"User {handle} not found")
+            
+            # Fetch user submissions to count problems solved
+            status_response = await http_client.get(
+                f"https://codeforces.com/api/user.status?handle={handle}"
+            )
+            
+            problems_solved = set()
+            if status_response.status_code == 200:
+                data = status_response.json()
+                if data.get("status") == "OK":
+                    for submission in data.get("result", []):
+                        if submission.get("verdict") == "OK":
+                            problem = submission.get("problem", {})
+                            contest_id = problem.get("contestId", "")
+                            index = problem.get("index", "")
+                            if contest_id and index:
+                                problems_solved.add(f"{contest_id}{index}")
+            
+            # Fetch rating history to count contests and wins
+            rating_response = await http_client.get(
+                f"https://codeforces.com/api/user.rating?handle={handle}"
+            )
+            
+            contests_participated = 0
+            contest_wins = 0
+            if rating_response.status_code == 200:
+                data = rating_response.json()
+                if data.get("status") == "OK":
+                    contests = data.get("result", [])
+                    contests_participated = len(contests)
+                    # Count wins (top 10 finishes)
+                    for contest in contests:
+                        if contest.get("rank", 999) <= 10:
+                            contest_wins += 1
+            
+            return UserStats(
+                handle=user_info.get("handle", ""),
+                rating=user_info.get("rating"),
+                rank=user_info.get("rank"),
+                maxRating=user_info.get("maxRating"),
+                maxRank=user_info.get("maxRank"),
+                problemsSolved=len(problems_solved),
+                contestsParticipated=contests_participated,
+                contestWins=contest_wins
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching user stats")
+
+
+@api_router.get("/idol/{handle}/journey", response_model=IdolJourney)
+async def get_idol_journey(
+    handle: str, 
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200)
+):
+    """
+    Get the problem solving journey of an idol - problems in chronological order
+    """
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as http_client:
+            # Fetch user submissions
+            status_response = await http_client.get(
+                f"https://codeforces.com/api/user.status?handle={handle}"
+            )
+            
+            if status_response.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"Could not fetch submissions for {handle}")
+            
+            data = status_response.json()
+            if data.get("status") != "OK":
+                raise HTTPException(status_code=404, detail=f"User {handle} not found")
+            
+            # Fetch rating history to get rating at time of solve
+            rating_response = await http_client.get(
+                f"https://codeforces.com/api/user.rating?handle={handle}"
+            )
+            
+            rating_history = []
+            if rating_response.status_code == 200:
+                rating_data = rating_response.json()
+                if rating_data.get("status") == "OK":
+                    rating_history = rating_data.get("result", [])
+            
+            # Build a function to get rating at a specific time
+            def get_rating_at_time(timestamp):
+                rating = None
+                for contest in rating_history:
+                    if contest.get("ratingUpdateTimeSeconds", 0) <= timestamp:
+                        rating = contest.get("newRating")
+                    else:
+                        break
+                return rating
+            
+            # Process submissions - keep only first successful submission for each problem
+            submissions = data.get("result", [])
+            # Sort by time (oldest first)
+            submissions.sort(key=lambda x: x.get("creationTimeSeconds", 0))
+            
+            seen_problems = set()
+            problems = []
+            
+            for submission in submissions:
+                if submission.get("verdict") != "OK":
+                    continue
+                    
+                problem = submission.get("problem", {})
+                contest_id = problem.get("contestId")
+                index = problem.get("index", "")
+                
+                if not contest_id or not index:
+                    continue
+                
+                problem_id = f"{contest_id}{index}"
+                
+                if problem_id in seen_problems:
+                    continue
+                
+                seen_problems.add(problem_id)
+                solved_time = submission.get("creationTimeSeconds", 0)
+                
+                # Check if it was solved during a contest
+                was_contest = submission.get("author", {}).get("participantType") in ["CONTESTANT", "VIRTUAL"]
+                
+                problems.append(ProblemInfo(
+                    contestId=contest_id,
+                    index=index,
+                    name=problem.get("name", ""),
+                    rating=problem.get("rating"),
+                    tags=problem.get("tags", []),
+                    problemId=problem_id,
+                    solvedAt=solved_time,
+                    ratingAtSolve=get_rating_at_time(solved_time),
+                    wasContestSolve=was_contest
+                ))
+            
+            total_problems = len(problems)
+            
+            # Apply pagination
+            paginated_problems = problems[offset:offset + limit]
+            has_more = (offset + limit) < total_problems
+            
+            return IdolJourney(
+                problems=paginated_problems,
+                totalProblems=total_problems,
+                hasMore=has_more
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching idol journey: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching idol journey")
+
+
+@api_router.get("/user/{handle}/solved-problems")
+async def get_user_solved_problems(handle: str):
+    """
+    Get list of problem IDs that the user has solved
+    """
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            response = await http_client.get(
+                f"https://codeforces.com/api/user.status?handle={handle}"
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"Could not fetch submissions for {handle}")
+            
+            data = response.json()
+            if data.get("status") != "OK":
+                raise HTTPException(status_code=404, detail=f"User {handle} not found")
+            
+            solved_problems = set()
+            for submission in data.get("result", []):
+                if submission.get("verdict") == "OK":
+                    problem = submission.get("problem", {})
+                    contest_id = problem.get("contestId", "")
+                    index = problem.get("index", "")
+                    if contest_id and index:
+                        solved_problems.add(f"{contest_id}{index}")
+            
+            return {"handle": handle, "solvedProblems": list(solved_problems)}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user solved problems: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching user solved problems")
+
+
+@api_router.get("/compare/{user_handle}/{idol_handle}", response_model=ComparisonData)
+async def compare_users(user_handle: str, idol_handle: str):
+    """
+    Compare user stats with idol stats
+    """
+    try:
+        # Fetch both user stats in parallel
+        user_stats_task = get_user_stats(user_handle)
+        idol_stats_task = get_user_stats(idol_handle)
+        
+        user_stats, idol_stats = await asyncio.gather(
+            user_stats_task, idol_stats_task
+        )
+        
+        # Calculate progress percentage based on problems solved
+        idol_problems = idol_stats.problemsSolved or 1
+        user_problems = user_stats.problemsSolved or 0
+        
+        progress_percent = min(100, (user_problems / idol_problems) * 100)
+        user_ahead = (user_stats.rating or 0) >= (idol_stats.rating or 0)
+        
+        return ComparisonData(
+            user=user_stats,
+            idol=idol_stats,
+            progressPercent=round(progress_percent, 1),
+            userAhead=user_ahead
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error comparing users: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error comparing users")
+
+
+# Session management endpoints
+@api_router.post("/session")
+async def create_session(user_handle: str, idol_handle: str):
+    """
+    Create or update a user session
+    """
+    try:
+        # Check if session exists
+        existing = await db.sessions.find_one({
+            "userHandle": user_handle,
+            "idolHandle": idol_handle
+        }, {"_id": 0})
+        
+        if existing:
+            return existing
+        
+        # Create new session
+        session = UserSession(
+            userHandle=user_handle,
+            idolHandle=idol_handle
+        )
+        
+        doc = session.model_dump()
+        doc['createdAt'] = doc['createdAt'].isoformat()
+        doc['updatedAt'] = doc['updatedAt'].isoformat()
+        
+        await db.sessions.insert_one(doc)
+        return session.model_dump()
+        
+    except Exception as e:
+        logger.error(f"Error creating session: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error creating session")
+
+
+@api_router.get("/session/{user_handle}/{idol_handle}")
+async def get_session(user_handle: str, idol_handle: str):
+    """
+    Get session data
+    """
+    session = await db.sessions.find_one({
+        "userHandle": user_handle,
+        "idolHandle": idol_handle
+    }, {"_id": 0})
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return session
+
+
+@api_router.put("/session/{user_handle}/{idol_handle}/mark-solved")
+async def mark_problem_solved(user_handle: str, idol_handle: str, problem_id: str):
+    """
+    Mark a problem as solved in the user's journey
+    """
+    try:
+        result = await db.sessions.update_one(
+            {"userHandle": user_handle, "idolHandle": idol_handle},
+            {
+                "$addToSet": {"solvedProblems": problem_id},
+                "$set": {"updatedAt": datetime.now(timezone.utc).isoformat()}
+            }
+        )
+        
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        return {"success": True, "problemId": problem_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error marking problem solved: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error marking problem solved")
+
+
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
     status_dict = input.model_dump()
