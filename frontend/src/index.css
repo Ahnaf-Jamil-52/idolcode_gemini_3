@@ -164,6 +164,35 @@ button, a, input {
     background-size: 1000px 100%;
 }
 
+/* Glass Card Effect */
+.glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
+}
+
+/* Grid Pattern Background */
+.grid-pattern {
+    background-image: 
+        linear-gradient(rgba(6, 182, 212, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(6, 182, 212, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+}
+
+/* Hero Pattern */
+.hero-pattern {
+    background: radial-gradient(ellipse at center, transparent 0%, hsl(220 20% 6%) 70%);
+}
+
+/* Line clamp utility */
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
 @layer base {
     [data-debug-wrapper="true"] {
         display: contents !important;
