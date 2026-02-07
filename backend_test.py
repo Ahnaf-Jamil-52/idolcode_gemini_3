@@ -731,5 +731,56 @@ def run_comprehensive_dashboard_tests():
         return False
 
 if __name__ == "__main__":
-    success = run_codeforces_search_tests()
-    sys.exit(0 if success else 1)
+    # Run comprehensive dashboard tests
+    print("Starting Idolcode Dashboard API Testing...")
+    dashboard_success = run_comprehensive_dashboard_tests()
+    
+    # Also run the original codeforces search tests for completeness
+    print("\n" + "=" * 80)
+    print("🔍 RUNNING ORIGINAL CODEFORCES SEARCH TESTS")
+    print("=" * 80)
+    search_success = run_codeforces_search_tests()
+    
+    overall_success = dashboard_success and search_success
+    print(f"\n🏁 OVERALL RESULT: {'SUCCESS' if overall_success else 'FAILED'}")
+    sys.exit(0 if overall_success else 1)
+
+def run_comprehensive_dashboard_tests():
+    """Run all Idolcode dashboard API tests"""
+    print("=" * 80)
+    print("🚀 IDOLCODE DASHBOARD API COMPREHENSIVE TESTING")
+    print("=" * 80)
+    
+    all_results = []
+    
+    # Run all test suites
+    all_results.extend(run_user_info_tests())
+    all_results.extend(run_user_stats_tests())
+    all_results.extend(run_idol_journey_tests())
+    all_results.extend(run_solved_problems_tests())
+    all_results.extend(run_compare_users_tests())
+    
+    # Summary
+    print("\n" + "=" * 80)
+    print("📊 COMPREHENSIVE TEST SUMMARY")
+    print("=" * 80)
+    
+    passed = 0
+    failed = 0
+    
+    for test_name, result in all_results:
+        if result["success"]:
+            print(f"✅ {test_name}: PASSED")
+            passed += 1
+        else:
+            print(f"❌ {test_name}: FAILED - {result['error']}")
+            failed += 1
+    
+    print(f"\n📈 Results: {passed} passed, {failed} failed")
+    
+    if failed == 0:
+        print("🎉 All dashboard API tests passed! Backend is working correctly.")
+        return True
+    else:
+        print("⚠️  Some tests failed. Please check the API implementation.")
+        return False
