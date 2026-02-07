@@ -201,7 +201,363 @@ def validate_comparison_data(comparison: Dict[str, Any]) -> List[str]:
     
     return errors
 
-def run_codeforces_search_tests():
+def validate_coder_suggestion(coder: Dict[str, Any]) -> List[str]:
+    """Validate a single coder suggestion against the CoderSuggestion model"""
+    errors = []
+    
+    # Required field: handle
+    if "handle" not in coder or not isinstance(coder["handle"], str):
+        errors.append("Missing or invalid 'handle' field")
+    
+    # Optional fields with type validation
+    optional_int_fields = ["rating", "maxRating"]
+    for field in optional_int_fields:
+        if field in coder and coder[field] is not None:
+            if not isinstance(coder[field], int):
+                errors.append(f"Field '{field}' should be int or null, got {type(coder[field])}")
+    
+    optional_str_fields = ["rank", "maxRank", "avatar"]
+    for field in optional_str_fields:
+        if field in coder and coder[field] is not None:
+            if not isinstance(coder[field], str):
+                errors.append(f"Field '{field}' should be string or null, got {type(coder[field])}")
+    
+    return errors
+
+def run_user_info_tests():
+    """Test User Info API endpoints"""
+    print("\n" + "=" * 80)
+    print("🔍 USER INFO API TESTING")
+    print("=" * 80)
+    
+    test_results = []
+    
+    # Test Case 1: Valid handle - tourist
+    print("\n📋 TEST CASE 1: Get user info for 'tourist'")
+    result = test_api_endpoint("/user/tourist/info")
+    test_results.append(("User info - tourist", result))
+    
+    if result["success"] and result["data"]:
+        user_info = result["data"]
+        print(f"   ✅ API call successful")
+        print(f"   📊 Handle: {user_info.get('handle', 'N/A')}")
+        print(f"   📊 Rating: {user_info.get('rating', 'N/A')}")
+        print(f"   📊 Rank: {user_info.get('rank', 'N/A')}")
+        print(f"   📊 Max Rating: {user_info.get('maxRating', 'N/A')}")
+        print(f"   📊 Max Rank: {user_info.get('maxRank', 'N/A')}")
+        print(f"   📊 Avatar: {'Present' if user_info.get('avatar') else 'N/A'}")
+        
+        # Validate structure
+        errors = validate_user_info(user_info)
+        if errors:
+            print(f"   ❌ Validation errors: {errors}")
+        else:
+            print("   ✅ Response format valid")
+    
+    # Test Case 2: Valid handle - Errichto
+    print("\n📋 TEST CASE 2: Get user info for 'Errichto'")
+    result = test_api_endpoint("/user/Errichto/info")
+    test_results.append(("User info - Errichto", result))
+    
+    if result["success"] and result["data"]:
+        user_info = result["data"]
+        print(f"   ✅ API call successful")
+        print(f"   📊 Handle: {user_info.get('handle', 'N/A')}")
+        print(f"   📊 Rating: {user_info.get('rating', 'N/A')}")
+        print(f"   📊 Rank: {user_info.get('rank', 'N/A')}")
+        
+        # Validate structure
+        errors = validate_user_info(user_info)
+        if errors:
+            print(f"   ❌ Validation errors: {errors}")
+        else:
+            print("   ✅ Response format valid")
+    
+    # Test Case 3: Invalid handle
+    print("\n📋 TEST CASE 3: Get user info for invalid handle")
+    result = test_api_endpoint("/user/nonexistent_user_12345/info")
+    test_results.append(("User info - invalid", result))
+    
+    if result["success"]:
+        print("   ❌ Expected 404 error for invalid user")
+    elif result["status_code"] == 404:
+        print("   ✅ Correctly returned 404 for invalid user")
+    else:
+        print(f"   ⚠️  Unexpected status code: {result['status_code']}")
+    
+    return test_results
+
+def run_user_stats_tests():
+    """Test User Stats API endpoints"""
+    print("\n" + "=" * 80)
+    print("📊 USER STATS API TESTING")
+    print("=" * 80)
+    
+    test_results = []
+    
+    # Test Case 1: Valid handle - tourist
+    print("\n📋 TEST CASE 1: Get user stats for 'tourist'")
+    result = test_api_endpoint("/user/tourist/stats")
+    test_results.append(("User stats - tourist", result))
+    
+    if result["success"] and result["data"]:
+        stats = result["data"]
+        print(f"   ✅ API call successful")
+        print(f"   📊 Handle: {stats.get('handle', 'N/A')}")
+        print(f"   📊 Problems Solved: {stats.get('problemsSolved', 'N/A')}")
+        print(f"   📊 Contests Participated: {stats.get('contestsParticipated', 'N/A')}")
+        print(f"   📊 Contest Wins: {stats.get('contestWins', 'N/A')}")
+        print(f"   📊 Rating: {stats.get('rating', 'N/A')}")
+        
+        # Validate structure and reasonable values
+        errors = validate_user_stats(stats)
+        if errors:
+            print(f"   ❌ Validation errors: {errors}")
+        else:
+            print("   ✅ Response format valid")
+            
+        # Check for reasonable values
+        problems_solved = stats.get('problemsSolved', 0)
+        contests = stats.get('contestsParticipated', 0)
+        wins = stats.get('contestWins', 0)
+        
+        if problems_solved > 10000:
+            print(f"   ⚠️  Very high problems solved: {problems_solved}")
+        if contests > 1000:
+            print(f"   ⚠️  Very high contests participated: {contests}")
+        if wins > contests:
+            print(f"   ❌ Contest wins ({wins}) cannot exceed contests participated ({contests})")
+        else:
+            print("   ✅ Stats values are reasonable")
+    
+    # Test Case 2: Valid handle - Errichto
+    print("\n📋 TEST CASE 2: Get user stats for 'Errichto'")
+    result = test_api_endpoint("/user/Errichto/stats")
+    test_results.append(("User stats - Errichto", result))
+    
+    if result["success"] and result["data"]:
+        stats = result["data"]
+        print(f"   ✅ API call successful")
+        print(f"   📊 Handle: {stats.get('handle', 'N/A')}")
+        print(f"   📊 Problems Solved: {stats.get('problemsSolved', 'N/A')}")
+        print(f"   📊 Contests Participated: {stats.get('contestsParticipated', 'N/A')}")
+        print(f"   📊 Contest Wins: {stats.get('contestWins', 'N/A')}")
+        
+        # Validate structure
+        errors = validate_user_stats(stats)
+        if errors:
+            print(f"   ❌ Validation errors: {errors}")
+        else:
+            print("   ✅ Response format valid")
+    
+    return test_results
+
+def run_idol_journey_tests():
+    """Test Idol Journey API endpoints"""
+    print("\n" + "=" * 80)
+    print("🚀 IDOL JOURNEY API TESTING")
+    print("=" * 80)
+    
+    test_results = []
+    
+    # Test Case 1: Basic journey for tourist
+    print("\n📋 TEST CASE 1: Get idol journey for 'tourist' (default pagination)")
+    result = test_api_endpoint("/idol/tourist/journey")
+    test_results.append(("Idol journey - tourist default", result))
+    
+    if result["success"] and result["data"]:
+        journey = result["data"]
+        print(f"   ✅ API call successful")
+        print(f"   📊 Total Problems: {journey.get('totalProblems', 'N/A')}")
+        print(f"   📊 Problems in Response: {len(journey.get('problems', []))}")
+        print(f"   📊 Has More: {journey.get('hasMore', 'N/A')}")
+        
+        # Validate structure
+        errors = validate_idol_journey(journey)
+        if errors:
+            print(f"   ❌ Validation errors: {errors}")
+        else:
+            print("   ✅ Response format valid")
+            
+        # Check first few problems
+        problems = journey.get('problems', [])
+        if problems:
+            print(f"   📊 First problem: {problems[0].get('name', 'N/A')} (ID: {problems[0].get('problemId', 'N/A')})")
+            if len(problems) > 1:
+                print(f"   📊 Second problem: {problems[1].get('name', 'N/A')} (ID: {problems[1].get('problemId', 'N/A')})")
+    
+    # Test Case 2: Pagination test - offset=0, limit=10
+    print("\n📋 TEST CASE 2: Get idol journey with pagination (offset=0, limit=10)")
+    result = test_api_endpoint("/idol/tourist/journey", {"offset": 0, "limit": 10})
+    test_results.append(("Idol journey - pagination 1", result))
+    
+    if result["success"] and result["data"]:
+        journey = result["data"]
+        print(f"   ✅ API call successful")
+        problems = journey.get('problems', [])
+        print(f"   📊 Problems returned: {len(problems)}")
+        print(f"   📊 Has More: {journey.get('hasMore', 'N/A')}")
+        
+        if len(problems) <= 10:
+            print("   ✅ Pagination limit respected")
+        else:
+            print(f"   ❌ Pagination limit not respected: got {len(problems)} > 10")
+    
+    # Test Case 3: Pagination test - offset=50, limit=50
+    print("\n📋 TEST CASE 3: Get idol journey with pagination (offset=50, limit=50)")
+    result = test_api_endpoint("/idol/tourist/journey", {"offset": 50, "limit": 50})
+    test_results.append(("Idol journey - pagination 2", result))
+    
+    if result["success"] and result["data"]:
+        journey = result["data"]
+        print(f"   ✅ API call successful")
+        problems = journey.get('problems', [])
+        print(f"   📊 Problems returned: {len(problems)}")
+        print(f"   📊 Has More: {journey.get('hasMore', 'N/A')}")
+        
+        if len(problems) <= 50:
+            print("   ✅ Pagination limit respected")
+        else:
+            print(f"   ❌ Pagination limit not respected: got {len(problems)} > 50")
+            
+        # Validate problem structure
+        if problems:
+            problem = problems[0]
+            required_fields = ["problemId", "name", "rating", "tags", "solvedAt", "ratingAtSolve", "wasContestSolve"]
+            missing_fields = [field for field in required_fields if field not in problem]
+            if missing_fields:
+                print(f"   ❌ Missing problem fields: {missing_fields}")
+            else:
+                print("   ✅ Problem structure complete")
+                print(f"   📊 Sample problem: {problem.get('name', 'N/A')} (Rating: {problem.get('rating', 'N/A')})")
+    
+    return test_results
+
+def run_solved_problems_tests():
+    """Test User Solved Problems API endpoints"""
+    print("\n" + "=" * 80)
+    print("✅ USER SOLVED PROBLEMS API TESTING")
+    print("=" * 80)
+    
+    test_results = []
+    
+    # Test Case 1: Get solved problems for Errichto
+    print("\n📋 TEST CASE 1: Get solved problems for 'Errichto'")
+    result = test_api_endpoint("/user/Errichto/solved-problems")
+    test_results.append(("Solved problems - Errichto", result))
+    
+    if result["success"] and result["data"]:
+        data = result["data"]
+        print(f"   ✅ API call successful")
+        print(f"   📊 Handle: {data.get('handle', 'N/A')}")
+        
+        solved_problems = data.get('solvedProblems', [])
+        print(f"   📊 Solved Problems Count: {len(solved_problems)}")
+        
+        if solved_problems:
+            print(f"   📊 First few problems: {solved_problems[:5]}")
+            
+            # Validate problem ID format
+            valid_format = True
+            for problem_id in solved_problems[:10]:  # Check first 10
+                if not isinstance(problem_id, str) or not problem_id:
+                    print(f"   ❌ Invalid problem ID format: {problem_id}")
+                    valid_format = False
+                    break
+            
+            if valid_format:
+                print("   ✅ Problem ID format valid")
+        
+        # Validate response structure
+        if "handle" not in data or "solvedProblems" not in data:
+            print("   ❌ Missing required fields in response")
+        elif not isinstance(data["solvedProblems"], list):
+            print("   ❌ solvedProblems should be a list")
+        else:
+            print("   ✅ Response structure valid")
+    
+    return test_results
+
+def run_compare_users_tests():
+    """Test Compare Users API endpoints"""
+    print("\n" + "=" * 80)
+    print("⚖️  COMPARE USERS API TESTING")
+    print("=" * 80)
+    
+    test_results = []
+    
+    # Test Case 1: Compare Errichto to tourist
+    print("\n📋 TEST CASE 1: Compare 'Errichto' to 'tourist'")
+    result = test_api_endpoint("/compare/Errichto/tourist")
+    test_results.append(("Compare users - Errichto vs tourist", result))
+    
+    if result["success"] and result["data"]:
+        comparison = result["data"]
+        print(f"   ✅ API call successful")
+        
+        user_stats = comparison.get('user', {})
+        idol_stats = comparison.get('idol', {})
+        
+        print(f"   📊 User: {user_stats.get('handle', 'N/A')} (Rating: {user_stats.get('rating', 'N/A')})")
+        print(f"   📊 Idol: {idol_stats.get('handle', 'N/A')} (Rating: {idol_stats.get('rating', 'N/A')})")
+        print(f"   📊 Progress Percent: {comparison.get('progressPercent', 'N/A')}%")
+        print(f"   📊 User Ahead: {comparison.get('userAhead', 'N/A')}")
+        
+        # Validate structure
+        errors = validate_comparison_data(comparison)
+        if errors:
+            print(f"   ❌ Validation errors: {errors}")
+        else:
+            print("   ✅ Response format valid")
+            
+        # Validate progress percentage is reasonable
+        progress = comparison.get('progressPercent', 0)
+        if 0 <= progress <= 100:
+            print("   ✅ Progress percentage is reasonable")
+        else:
+            print(f"   ❌ Progress percentage out of range: {progress}")
+    
+    return test_results
+
+def run_comprehensive_dashboard_tests():
+    """Run all Idolcode dashboard API tests"""
+    print("=" * 80)
+    print("🚀 IDOLCODE DASHBOARD API COMPREHENSIVE TESTING")
+    print("=" * 80)
+    
+    all_results = []
+    
+    # Run all test suites
+    all_results.extend(run_user_info_tests())
+    all_results.extend(run_user_stats_tests())
+    all_results.extend(run_idol_journey_tests())
+    all_results.extend(run_solved_problems_tests())
+    all_results.extend(run_compare_users_tests())
+    
+    # Summary
+    print("\n" + "=" * 80)
+    print("📊 COMPREHENSIVE TEST SUMMARY")
+    print("=" * 80)
+    
+    passed = 0
+    failed = 0
+    
+    for test_name, result in all_results:
+        if result["success"]:
+            print(f"✅ {test_name}: PASSED")
+            passed += 1
+        else:
+            print(f"❌ {test_name}: FAILED - {result['error']}")
+            failed += 1
+    
+    print(f"\n📈 Results: {passed} passed, {failed} failed")
+    
+    if failed == 0:
+        print("🎉 All dashboard API tests passed! Backend is working correctly.")
+        return True
+    else:
+        print("⚠️  Some tests failed. Please check the API implementation.")
+        return False
     """Run comprehensive tests for the Codeforces User Search API"""
     
     print("=" * 80)
