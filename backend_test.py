@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
-Backend API Testing for Codeforces User Search
-Tests the GET /api/coders/search endpoint with various scenarios
+Backend API Testing for Idolcode Dashboard APIs
+Tests all backend endpoints comprehensively including:
+- User Info API
+- User Stats API  
+- Idol Journey API
+- User Solved Problems API
+- Compare Users API
+- Codeforces User Search API
 """
 
 import requests
