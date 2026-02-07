@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, LogOut, User } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,6 +24,11 @@ export const Navbar = () => {
     { name: 'Pricing', href: '#pricing' },
   ];
 
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -29,7 +38,7 @@ export const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20">
           {/* Logo */}
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => navigate('/')}>
             <div className="relative">
               <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full"></div>
               <div className="relative w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center font-bold text-xl">
@@ -57,15 +66,38 @@ export const Navbar = () => {
 
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              className="text-foreground hover:text-primary hover:bg-primary/10"
-            >
-              Login
-            </Button>
-            <Button className="bg-gradient-to-r from-primary to-accent hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] hover:scale-105 transition-all">
-              Register
-            </Button>
+            {isAuthenticated ? (
+              <>
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass-card border border-primary/30">
+                  <User className="w-4 h-4 text-primary" />
+                  <span className="text-sm text-foreground font-medium">{user?.handle}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  onClick={handleLogout}
+                  className="text-foreground hover:text-red-400 hover:bg-red-500/10"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  onClick={() => navigate('/login')}
+                  className="text-foreground hover:text-primary hover:bg-primary/10"
+                >
+                  Login
+                </Button>
+                <Button 
+                  onClick={() => navigate('/login')}
+                  className="bg-gradient-to-r from-primary to-accent hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] hover:scale-105 transition-all"
+                >
+                  Register
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -91,12 +123,47 @@ export const Navbar = () => {
               </a>
             ))}
             <div className="flex flex-col space-y-2 pt-4">
-              <Button variant="ghost" className="w-full">
-                Login
-              </Button>
-              <Button className="w-full bg-gradient-to-r from-primary to-accent">
-                Register
-              </Button>
+              {isAuthenticated ? (
+                <>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg glass-card border border-primary/30">
+                    <User className="w-4 h-4 text-primary" />
+                    <span className="text-sm text-foreground">{user?.handle}</span>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full text-red-400"
+                    onClick={() => {
+                      handleLogout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full"
+                    onClick={() => {
+                      navigate('/login');
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    Login
+                  </Button>
+                  <Button 
+                    className="w-full bg-gradient-to-r from-primary to-accent"
+                    onClick={() => {
+                      navigate('/login');
+                      setIsMobileMenuOpen(false);
+                    }}
+                  >
+                    Register
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}
