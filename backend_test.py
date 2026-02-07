@@ -69,26 +69,135 @@ def test_api_endpoint(endpoint: str, params: Dict[str, Any] = None) -> Dict[str,
             "error": f"Request error: {e}"
         }
 
-def validate_coder_suggestion(coder: Dict[str, Any]) -> List[str]:
-    """Validate a single coder suggestion against the CoderSuggestion model"""
+def validate_user_info(user_info: Dict[str, Any]) -> List[str]:
+    """Validate UserInfo response structure"""
     errors = []
     
     # Required field: handle
-    if "handle" not in coder or not isinstance(coder["handle"], str):
+    if "handle" not in user_info or not isinstance(user_info["handle"], str):
         errors.append("Missing or invalid 'handle' field")
     
     # Optional fields with type validation
+    optional_int_fields = ["rating", "maxRating", "contribution", "friendOfCount", "registrationTimeSeconds"]
+    for field in optional_int_fields:
+        if field in user_info and user_info[field] is not None:
+            if not isinstance(user_info[field], int):
+                errors.append(f"Field '{field}' should be int or null, got {type(user_info[field])}")
+    
+    optional_str_fields = ["rank", "maxRank", "avatar", "titlePhoto"]
+    for field in optional_str_fields:
+        if field in user_info and user_info[field] is not None:
+            if not isinstance(user_info[field], str):
+                errors.append(f"Field '{field}' should be string or null, got {type(user_info[field])}")
+    
+    return errors
+
+def validate_user_stats(user_stats: Dict[str, Any]) -> List[str]:
+    """Validate UserStats response structure"""
+    errors = []
+    
+    # Required field: handle
+    if "handle" not in user_stats or not isinstance(user_stats["handle"], str):
+        errors.append("Missing or invalid 'handle' field")
+    
+    # Required int fields
+    required_int_fields = ["problemsSolved", "contestsParticipated", "contestWins"]
+    for field in required_int_fields:
+        if field not in user_stats:
+            errors.append(f"Missing required field '{field}'")
+        elif not isinstance(user_stats[field], int):
+            errors.append(f"Field '{field}' should be int, got {type(user_stats[field])}")
+        elif user_stats[field] < 0:
+            errors.append(f"Field '{field}' should not be negative, got {user_stats[field]}")
+    
+    # Optional fields
     optional_int_fields = ["rating", "maxRating"]
     for field in optional_int_fields:
-        if field in coder and coder[field] is not None:
-            if not isinstance(coder[field], int):
-                errors.append(f"Field '{field}' should be int or null, got {type(coder[field])}")
+        if field in user_stats and user_stats[field] is not None:
+            if not isinstance(user_stats[field], int):
+                errors.append(f"Field '{field}' should be int or null, got {type(user_stats[field])}")
     
-    optional_str_fields = ["rank", "maxRank", "avatar"]
+    optional_str_fields = ["rank", "maxRank"]
     for field in optional_str_fields:
-        if field in coder and coder[field] is not None:
-            if not isinstance(coder[field], str):
-                errors.append(f"Field '{field}' should be string or null, got {type(coder[field])}")
+        if field in user_stats and user_stats[field] is not None:
+            if not isinstance(user_stats[field], str):
+                errors.append(f"Field '{field}' should be string or null, got {type(user_stats[field])}")
+    
+    return errors
+
+def validate_idol_journey(journey: Dict[str, Any]) -> List[str]:
+    """Validate IdolJourney response structure"""
+    errors = []
+    
+    # Required fields
+    if "problems" not in journey:
+        errors.append("Missing 'problems' field")
+    elif not isinstance(journey["problems"], list):
+        errors.append(f"Field 'problems' should be list, got {type(journey['problems'])}")
+    
+    if "totalProblems" not in journey:
+        errors.append("Missing 'totalProblems' field")
+    elif not isinstance(journey["totalProblems"], int):
+        errors.append(f"Field 'totalProblems' should be int, got {type(journey['totalProblems'])}")
+    
+    if "hasMore" not in journey:
+        errors.append("Missing 'hasMore' field")
+    elif not isinstance(journey["hasMore"], bool):
+        errors.append(f"Field 'hasMore' should be bool, got {type(journey['hasMore'])}")
+    
+    # Validate problem structure
+    if "problems" in journey and isinstance(journey["problems"], list):
+        for i, problem in enumerate(journey["problems"]):
+            if not isinstance(problem, dict):
+                errors.append(f"Problem {i} should be dict, got {type(problem)}")
+                continue
+            
+            # Required problem fields
+            required_fields = ["problemId", "name", "index"]
+            for field in required_fields:
+                if field not in problem:
+                    errors.append(f"Problem {i} missing '{field}' field")
+                elif not isinstance(problem[field], str):
+                    errors.append(f"Problem {i} field '{field}' should be string, got {type(problem[field])}")
+            
+            # Optional problem fields
+            if "tags" in problem and not isinstance(problem["tags"], list):
+                errors.append(f"Problem {i} field 'tags' should be list, got {type(problem['tags'])}")
+    
+    return errors
+
+def validate_comparison_data(comparison: Dict[str, Any]) -> List[str]:
+    """Validate ComparisonData response structure"""
+    errors = []
+    
+    # Required fields
+    if "user" not in comparison:
+        errors.append("Missing 'user' field")
+    elif not isinstance(comparison["user"], dict):
+        errors.append(f"Field 'user' should be dict, got {type(comparison['user'])}")
+    else:
+        user_errors = validate_user_stats(comparison["user"])
+        errors.extend([f"User stats: {err}" for err in user_errors])
+    
+    if "idol" not in comparison:
+        errors.append("Missing 'idol' field")
+    elif not isinstance(comparison["idol"], dict):
+        errors.append(f"Field 'idol' should be dict, got {type(comparison['idol'])}")
+    else:
+        idol_errors = validate_user_stats(comparison["idol"])
+        errors.extend([f"Idol stats: {err}" for err in idol_errors])
+    
+    if "progressPercent" not in comparison:
+        errors.append("Missing 'progressPercent' field")
+    elif not isinstance(comparison["progressPercent"], (int, float)):
+        errors.append(f"Field 'progressPercent' should be number, got {type(comparison['progressPercent'])}")
+    elif not (0 <= comparison["progressPercent"] <= 100):
+        errors.append(f"Field 'progressPercent' should be 0-100, got {comparison['progressPercent']}")
+    
+    if "userAhead" not in comparison:
+        errors.append("Missing 'userAhead' field")
+    elif not isinstance(comparison["userAhead"], bool):
+        errors.append(f"Field 'userAhead' should be bool, got {type(comparison['userAhead'])}")
     
     return errors
 
