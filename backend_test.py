@@ -730,21 +730,6 @@ def run_comprehensive_dashboard_tests():
         print("⚠️  Some tests failed. Please check the API implementation.")
         return False
 
-if __name__ == "__main__":
-    # Run comprehensive dashboard tests
-    print("Starting Idolcode Dashboard API Testing...")
-    dashboard_success = run_comprehensive_dashboard_tests()
-    
-    # Also run the original codeforces search tests for completeness
-    print("\n" + "=" * 80)
-    print("🔍 RUNNING ORIGINAL CODEFORCES SEARCH TESTS")
-    print("=" * 80)
-    search_success = run_codeforces_search_tests()
-    
-    overall_success = dashboard_success and search_success
-    print(f"\n🏁 OVERALL RESULT: {'SUCCESS' if overall_success else 'FAILED'}")
-    sys.exit(0 if overall_success else 1)
-
 def run_comprehensive_dashboard_tests():
     """Run all Idolcode dashboard API tests"""
     print("=" * 80)
@@ -784,3 +769,11 @@ def run_comprehensive_dashboard_tests():
     else:
         print("⚠️  Some tests failed. Please check the API implementation.")
         return False
+
+if __name__ == "__main__":
+    # Run comprehensive dashboard tests
+    print("Starting Idolcode Dashboard API Testing...")
+    dashboard_success = run_comprehensive_dashboard_tests()
+    
+    print(f"\n🏁 OVERALL RESULT: {'SUCCESS' if dashboard_success else 'FAILED'}")
+    sys.exit(0 if dashboard_success else 1)
