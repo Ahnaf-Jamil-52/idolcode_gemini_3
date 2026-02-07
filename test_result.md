@@ -105,6 +105,42 @@
 user_problem_statement: "TESTING TASK: Verify backend deployment fixes are working correctly. CONTEXT: Just fixed 3 critical deployment issues: 1. Removed malformed .gitignore entries that were blocking .env files, 2. Removed hardcoded MONGO_URL and DB_NAME from backend/.env (now using defaults with .get() method), 3. Added pagination to /api/status endpoint with skip, limit parameters and sorting. KEY ENDPOINTS TO TEST: /api/register, /api/login, /api/check, /api/status (NEW: now with pagination), and verify no MONGO_URL errors in backend logs."
 
 backend:
+  - task: "Backend Deployment Health Check"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "DEPLOYMENT TESTING COMPLETED ✅ Backend health check passed. GET /api/ endpoint responding correctly with {'message': 'Hello World'}. MongoDB connection working properly using .get() method with defaults. Backend service restarted successfully and no MONGO_URL errors in current logs."
+
+  - task: "Status Endpoint Pagination"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "PAGINATION TESTING COMPLETED ✅ GET /api/status endpoint with new pagination features working perfectly. Tested: (1) Default pagination (no parameters) - returns data with proper structure, (2) Custom pagination (skip=0, limit=3) - correctly limits results to 3, (3) Skip parameter (skip=2, limit=2) - properly skips and limits, (4) Edge cases (limit=1) - minimum limits working. Timestamps present and sorting by timestamp descending (newest first) is working. All pagination parameters respected."
+
+  - task: "Status Check Creation"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "STATUS CHECK CREATION TESTING COMPLETED ✅ POST /api/status endpoint working correctly. Successfully creates status checks with proper UUID generation, client_name field, and ISO timestamp. Response structure includes all required fields (id, client_name, timestamp). Validation working properly - correctly rejects invalid requests with 422 status code when client_name is missing. Data persistence to MongoDB working correctly."
+
   - task: "Codeforces User Search API"
     implemented: true
     working: true
@@ -119,6 +155,9 @@ backend:
       - working: true
         agent: "testing"
         comment: "COMPREHENSIVE TESTING COMPLETED ✅ All 8 core test cases passed: (1) Search 'tourist' - returned valid profile with rating 3533 and rank 'legendary grandmaster', (2) Search 'benq' - returned Benq profile with rating 3792, (3) Search 'petr' - returned Petr profile with rating 3266, (4) Search 'tou' - returned 1 suggestion (TOU), (5) Empty query - correctly returned empty array, (6) Single character query - correctly returned empty array, (7) Invalid coder query - gracefully returned empty array, (8) Response format validation - all responses match CoderSuggestion model with proper handle, rating, rank fields. Additional edge cases tested: queries with spaces, case sensitivity, special characters, very long queries, limit parameters (0, 3, 100). API integrates correctly with Codeforces API, handles errors gracefully, returns valid JSON arrays. Backend logs show no errors. All functionality working as expected."
+      - working: true
+        agent: "testing"
+        comment: "POST-DEPLOYMENT VERIFICATION ✅ Confirmed Codeforces search API still working correctly after deployment fixes. GET /api/coders/search?query=tourist returns valid data with rating 3533. No regression issues detected."
 
   - task: "User Info API"
     implemented: true
