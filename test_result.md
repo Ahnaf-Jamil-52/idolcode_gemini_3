@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Test the Idolcode landing page comprehensively including page structure, interactive elements, responsive design, visual design, and content verification. Added search dropdown functionality with Codeforces API integration and profile page navigation."
+user_problem_statement: "Test the Idolcode dashboard backend APIs comprehensively including User Info API, User Stats API, Idol Journey API, User Solved Problems API, and Compare Users API. All endpoints should handle valid handles (tourist, Errichto), invalid handles, pagination, and return proper data structures with reasonable values."
 
 backend:
   - task: "Codeforces User Search API"
@@ -119,6 +119,66 @@ backend:
       - working: true
         agent: "testing"
         comment: "COMPREHENSIVE TESTING COMPLETED ✅ All 8 core test cases passed: (1) Search 'tourist' - returned valid profile with rating 3533 and rank 'legendary grandmaster', (2) Search 'benq' - returned Benq profile with rating 3792, (3) Search 'petr' - returned Petr profile with rating 3266, (4) Search 'tou' - returned 1 suggestion (TOU), (5) Empty query - correctly returned empty array, (6) Single character query - correctly returned empty array, (7) Invalid coder query - gracefully returned empty array, (8) Response format validation - all responses match CoderSuggestion model with proper handle, rating, rank fields. Additional edge cases tested: queries with spaces, case sensitivity, special characters, very long queries, limit parameters (0, 3, 100). API integrates correctly with Codeforces API, handles errors gracefully, returns valid JSON arrays. Backend logs show no errors. All functionality working as expected."
+
+  - task: "User Info API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE TESTING COMPLETED ✅ GET /api/user/{handle}/info endpoint fully functional. Tested with valid handles 'tourist' (rating: 3533, rank: legendary grandmaster, maxRating: 4009) and 'Errichto' (rating: 2916, rank: international grandmaster). Correctly returns 404 for invalid handle 'nonexistent_user_12345'. Response contains all required fields: handle, rating, rank, maxRating, maxRank, avatar. Data structure validation passed. All test cases successful."
+
+  - task: "User Stats API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE TESTING COMPLETED ✅ GET /api/user/{handle}/stats endpoint fully functional. Tested with 'tourist' (2954 problems solved, 296 contests participated, 259 contest wins) and 'Errichto' (1518 problems solved, 134 contests participated, 19 contest wins). All stats values are reasonable and non-negative. Response contains required fields: problemsSolved, contestsParticipated, contestWins. Data validation passed. Contest wins never exceed contests participated. All test cases successful."
+
+  - task: "Idol Journey API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE TESTING COMPLETED ✅ GET /api/idol/{handle}/journey endpoint fully functional. Tested with 'tourist' handle showing 2954 total problems. Default pagination returns 100 problems with hasMore=true. Pagination tests: (offset=0, limit=10) returns exactly 10 problems, (offset=50, limit=50) returns 50 problems. Each problem contains required fields: problemId, name, rating, tags, solvedAt, ratingAtSolve, wasContestSolve. Problem structure validation passed. Pagination limits respected. All test cases successful."
+
+  - task: "User Solved Problems API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE TESTING COMPLETED ✅ GET /api/user/{handle}/solved-problems endpoint fully functional. Tested with 'Errichto' handle returning 1518 solved problems. Response contains handle and solvedProblems array with proper problem ID format (e.g., '1361A', '507B'). Problem ID validation passed. Response structure validation passed. All test cases successful."
+
+  - task: "Compare Users API"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "COMPREHENSIVE TESTING COMPLETED ✅ GET /api/compare/{user_handle}/{idol_handle} endpoint fully functional. Tested comparing 'Errichto' to 'tourist'. Returns proper comparison data: user stats (Errichto: rating 2916), idol stats (tourist: rating 3533), progressPercent (51.4%), userAhead (false). Progress percentage is reasonable (0-100 range). Response structure validation passed. All required fields present. All test cases successful."
 
 frontend:
   - task: "Navbar Component"
