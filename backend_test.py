@@ -276,14 +276,17 @@ def run_user_info_tests():
     # Test Case 3: Invalid handle
     print("\n📋 TEST CASE 3: Get user info for invalid handle")
     result = test_api_endpoint("/user/nonexistent_user_12345/info")
-    test_results.append(("User info - invalid", result))
     
-    if result["success"]:
-        print("   ❌ Expected 404 error for invalid user")
-    elif result["status_code"] == 404:
+    # For invalid user, 404 is the expected and correct response
+    if result["status_code"] == 404:
         print("   ✅ Correctly returned 404 for invalid user")
+        test_results.append(("User info - invalid", {"success": True, "status_code": 404, "data": None, "error": None}))
+    elif result["success"]:
+        print("   ❌ Expected 404 error for invalid user")
+        test_results.append(("User info - invalid", result))
     else:
         print(f"   ⚠️  Unexpected status code: {result['status_code']}")
+        test_results.append(("User info - invalid", result))
     
     return test_results
 
