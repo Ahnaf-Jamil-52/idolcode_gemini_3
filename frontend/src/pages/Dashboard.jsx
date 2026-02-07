@@ -442,7 +442,7 @@ export const Dashboard = () => {
               {idolHandle}
             </span>
           </h1>
-          {!comparisonLoaded ? (
+          {comparison === null ? (
             <div className="flex items-center justify-center gap-2 text-muted-foreground">
               <Loader2 className="w-5 h-5 animate-spin" />
               Loading progress...
