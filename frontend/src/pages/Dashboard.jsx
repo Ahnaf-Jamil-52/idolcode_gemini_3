@@ -233,7 +233,8 @@ export const Dashboard = () => {
   // Fetch comparison data
   useEffect(() => {
     const fetchComparison = async () => {
-      if (!user?.handle || !idolHandle) return;
+      // Wait for auth to load and user to be available
+      if (isAuthLoading || !user?.handle || !idolHandle) return;
       
       setIsLoadingComparison(true);
       try {
@@ -249,7 +250,7 @@ export const Dashboard = () => {
     };
     
     fetchComparison();
-  }, [user?.handle, idolHandle, selectIdol]);
+  }, [isAuthLoading, user?.handle, idolHandle, selectIdol]);
   
   // Fetch idol's journey
   useEffect(() => {
