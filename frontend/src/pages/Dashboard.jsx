@@ -364,9 +364,8 @@ export const Dashboard = () => {
   
   // Handle solve button click
   const handleSolve = (problem) => {
-    // Open Codeforces problem page in new tab
-    const url = `https://codeforces.com/contest/${problem.contestId}/problem/${problem.index}`;
-    window.open(url, '_blank');
+    // Navigate to workspace page
+    navigate(`/workspace/${problem.contestId}/${problem.index}`);
   };
   
   // Initialize current view to last solved + 1 or first problem
