@@ -101,6 +101,27 @@ class UserSession(BaseModel):
     createdAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updatedAt: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+
+class ProblemExample(BaseModel):
+    input: str
+    output: str
+
+
+class ProblemContent(BaseModel):
+    contestId: int
+    index: str
+    name: str
+    timeLimit: str = ""
+    memoryLimit: str = ""
+    problemStatement: str = ""
+    inputSpecification: str = ""
+    outputSpecification: str = ""
+    examples: List[ProblemExample] = []
+    note: str = ""
+    rating: Optional[int] = None
+    tags: List[str] = []
+    url: str = ""
+
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
