@@ -471,9 +471,7 @@ metadata:
 
 test_plan:
   current_focus:
-    - "Backend Deployment Health Check"
-    - "Status Endpoint Pagination"
-    - "Status Check Creation"
+    - "Workspace Page"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
