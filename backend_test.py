@@ -16,7 +16,7 @@ import sys
 from typing import List, Dict, Any
 
 # Backend URL from frontend environment
-BACKEND_URL = "https://github-sync-issue-1.preview.emergentagent.com"
+BACKEND_URL = "https://code-workspace-39.preview.emergentagent.com"
 API_BASE = f"{BACKEND_URL}/api"
 
 def test_api_endpoint(endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
