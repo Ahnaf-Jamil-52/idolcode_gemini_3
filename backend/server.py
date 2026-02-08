@@ -487,106 +487,103 @@ async def compare_users(user_handle: str, idol_handle: str):
 @api_router.get("/problem/{contest_id}/{problem_index}", response_model=ProblemContent)
 async def get_problem_content(contest_id: int, problem_index: str):
     """
-    Fetch and parse Codeforces problem content by contest ID and problem index
+    Fetch problem content from Codeforces API and parse additional details
     """
     try:
         url = f"https://codeforces.com/contest/{contest_id}/problem/{problem_index}"
         
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-        }
-        
         async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as http_client:
-            response = await http_client.get(url, headers=headers)
+            # First, get problem metadata from API
+            api_response = await http_client.get(
+                f"https://codeforces.com/api/problemset.problems"
+            )
             
-            if response.status_code != 200:
+            problem_data = None
+            if api_response.status_code == 200:
+                api_data = api_response.json()
+                if api_data.get("status") == "OK":
+                    problems = api_data.get("result", {}).get("problems", [])
+                    for p in problems:
+                        if p.get("contestId") == contest_id and p.get("index") == problem_index:
+                            problem_data = p
+                            break
+            
+            if not problem_data:
                 raise HTTPException(status_code=404, detail=f"Problem not found: {contest_id}{problem_index}")
             
-            html = response.text
-            soup = BeautifulSoup(html, 'html.parser')
+            name = problem_data.get("name", "")
+            rating = problem_data.get("rating")
+            tags = problem_data.get("tags", [])
             
-            # Extract problem name
-            title_elem = soup.select_one('.problem-statement .title')
-            name = ""
-            if title_elem:
-                name = title_elem.get_text().strip()
-                # Remove the problem index prefix (e.g., "A. " or "B1. ")
-                name = re.sub(r'^[A-Z]\d*\.\s*', '', name)
-            
-            # Extract time and memory limits
-            time_limit = ""
-            memory_limit = ""
-            time_elem = soup.select_one('.problem-statement .time-limit')
-            memory_elem = soup.select_one('.problem-statement .memory-limit')
-            if time_elem:
-                time_limit = time_elem.get_text().replace('time limit per test', '').strip()
-            if memory_elem:
-                memory_limit = memory_elem.get_text().replace('memory limit per test', '').strip()
-            
-            # Extract problem statement
+            # Try to fetch problem statement from Codeforces website
             problem_statement = ""
-            statement_div = soup.select('.problem-statement > div')
-            for div in statement_div:
-                # Skip the header divs (time-limit, memory-limit, etc.)
-                if div.get('class') and any(c in ['time-limit', 'memory-limit', 'input-file', 'output-file', 'header'] for c in div.get('class', [])):
-                    continue
-                # Skip input/output specification and examples
-                if div.select_one('.section-title'):
-                    break
-                problem_statement += div.get_text(separator='\n').strip() + '\n\n'
-            
-            problem_statement = problem_statement.strip()
-            
-            # Extract input specification
             input_spec = ""
-            input_div = soup.select_one('.problem-statement .input-specification')
-            if input_div:
-                input_spec = input_div.get_text(separator='\n').replace('Input', '', 1).strip()
-            
-            # Extract output specification
             output_spec = ""
-            output_div = soup.select_one('.problem-statement .output-specification')
-            if output_div:
-                output_spec = output_div.get_text(separator='\n').replace('Output', '', 1).strip()
-            
-            # Extract examples
             examples = []
-            sample_tests = soup.select_one('.problem-statement .sample-tests')
-            if sample_tests:
-                inputs = sample_tests.select('.input pre')
-                outputs = sample_tests.select('.output pre')
-                for inp, out in zip(inputs, outputs):
-                    # Handle different pre content formats
-                    inp_text = inp.get_text(separator='\n').strip()
-                    out_text = out.get_text(separator='\n').strip()
-                    examples.append(ProblemExample(input=inp_text, output=out_text))
-            
-            # Extract note
             note = ""
-            note_div = soup.select_one('.problem-statement .note')
-            if note_div:
-                note = note_div.get_text(separator='\n').replace('Note', '', 1).strip()
+            time_limit = "2 seconds"  # Default
+            memory_limit = "256 megabytes"  # Default
             
-            # Get rating and tags from API
-            rating = None
-            tags = []
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Referer': 'https://codeforces.com/',
+            }
+            
             try:
-                api_response = await http_client.get(
-                    f"https://codeforces.com/api/problemset.problems"
-                )
-                if api_response.status_code == 200:
-                    api_data = api_response.json()
-                    if api_data.get("status") == "OK":
-                        problems = api_data.get("result", {}).get("problems", [])
-                        for p in problems:
-                            if p.get("contestId") == contest_id and p.get("index") == problem_index:
-                                rating = p.get("rating")
-                                tags = p.get("tags", [])
-                                break
-            except Exception as api_error:
-                logger.warning(f"Could not fetch problem metadata: {api_error}")
+                response = await http_client.get(url, headers=headers)
+                
+                if response.status_code == 200:
+                    html = response.text
+                    soup = BeautifulSoup(html, 'html.parser')
+                    
+                    # Extract time and memory limits
+                    time_elem = soup.select_one('.problem-statement .time-limit')
+                    memory_elem = soup.select_one('.problem-statement .memory-limit')
+                    if time_elem:
+                        time_limit = time_elem.get_text().replace('time limit per test', '').strip()
+                    if memory_elem:
+                        memory_limit = memory_elem.get_text().replace('memory limit per test', '').strip()
+                    
+                    # Extract problem statement - get text from divs without class
+                    statement_div = soup.select_one('.problem-statement')
+                    if statement_div:
+                        # Get the main statement text (usually in divs without specific classes)
+                        for div in statement_div.find_all('div', recursive=False):
+                            class_list = div.get('class', [])
+                            if not class_list:
+                                problem_statement += div.get_text(separator='\n').strip() + '\n\n'
+                    
+                    # Extract input specification
+                    input_div = soup.select_one('.problem-statement .input-specification')
+                    if input_div:
+                        input_spec = input_div.get_text(separator='\n').replace('Input', '', 1).strip()
+                    
+                    # Extract output specification
+                    output_div = soup.select_one('.problem-statement .output-specification')
+                    if output_div:
+                        output_spec = output_div.get_text(separator='\n').replace('Output', '', 1).strip()
+                    
+                    # Extract examples
+                    sample_tests = soup.select_one('.problem-statement .sample-tests')
+                    if sample_tests:
+                        inputs = sample_tests.select('.input pre')
+                        outputs = sample_tests.select('.output pre')
+                        for inp, out in zip(inputs, outputs):
+                            inp_text = inp.get_text(separator='\n').strip()
+                            out_text = out.get_text(separator='\n').strip()
+                            examples.append(ProblemExample(input=inp_text, output=out_text))
+                    
+                    # Extract note
+                    note_div = soup.select_one('.problem-statement .note')
+                    if note_div:
+                        note = note_div.get_text(separator='\n').replace('Note', '', 1).strip()
+                        
+            except Exception as parse_error:
+                logger.warning(f"Could not parse problem page: {parse_error}")
+                # Use fallback placeholder content
+                problem_statement = f"Problem {contest_id}{problem_index}: {name}\n\nPlease visit Codeforces to see the full problem statement."
             
             return ProblemContent(
                 contestId=contest_id,
@@ -594,7 +591,7 @@ async def get_problem_content(contest_id: int, problem_index: str):
                 name=name,
                 timeLimit=time_limit,
                 memoryLimit=memory_limit,
-                problemStatement=problem_statement,
+                problemStatement=problem_statement.strip() if problem_statement.strip() else f"Problem {contest_id}{problem_index}: {name}\n\nVisit Codeforces for full statement.",
                 inputSpecification=input_spec,
                 outputSpecification=output_spec,
                 examples=examples,
