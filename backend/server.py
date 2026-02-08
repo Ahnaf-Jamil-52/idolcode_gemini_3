@@ -11,6 +11,8 @@ import uuid
 from datetime import datetime, timezone
 import httpx
 import asyncio
+import re
+from bs4 import BeautifulSoup
 
 
 ROOT_DIR = Path(__file__).parent
