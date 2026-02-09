@@ -16,6 +16,15 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
+    // Track active editor changes to auto-detect problem folders
+    context.subscriptions.push(
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+            if (editor) {
+                sidebarProvider.handleActiveFileChange(editor.document.uri);
+            }
+        })
+    );
+
     // Register logout command
     context.subscriptions.push(
         vscode.commands.registerCommand('idolcode.logout', () => {
@@ -36,3 +45,4 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
     console.log('Idolcode extension deactivated');
 }
+

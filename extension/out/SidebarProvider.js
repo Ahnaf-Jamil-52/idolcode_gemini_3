@@ -37,6 +37,9 @@ exports.SidebarProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const api = __importStar(require("./api"));
 const storage_1 = require("./storage");
+const workspaceManager_1 = require("./utils/workspaceManager");
+const testRunner_1 = require("./runner/testRunner");
+const ProblemPanel_1 = require("./webview/ProblemPanel");
 class SidebarProvider {
     constructor(_extensionUri, _context) {
         this._extensionUri = _extensionUri;
@@ -71,6 +74,7 @@ class SidebarProvider {
                     break;
                 case 'backToWorkspace':
                     this._currentView = 'workspace';
+                    (0, storage_1.updateCurrentView)(this._context, 'workspace');
                     this._updateWebview();
                     break;
                 case 'changeIdol':
@@ -87,6 +91,12 @@ class SidebarProvider {
                 case 'retryWakeup':
                     await this._initializeServer();
                     break;
+                case 'runTests':
+                    await this._handleRunTests();
+                    break;
+                case 'openProblemPanel':
+                    this._openProblemInWebview();
+                    break;
             }
         });
     }
@@ -102,7 +112,16 @@ class SidebarProvider {
             const session = (0, storage_1.getSession)(this._context);
             if (session) {
                 if (session.idolHandle) {
-                    this._currentView = 'workspace';
+                    // Check for saved view state (e.g., problem-solving)
+                    const savedViewState = (0, storage_1.getViewState)(this._context);
+                    if (savedViewState?.currentView === 'problem-solving' && savedViewState?.currentProblem) {
+                        // Restore to problem-solving view
+                        this._currentProblem = savedViewState.currentProblem;
+                        this._currentView = 'problem-solving';
+                    }
+                    else {
+                        this._currentView = 'workspace';
+                    }
                     await this._loadWorkspaceData();
                 }
                 else {
@@ -124,7 +143,53 @@ class SidebarProvider {
     }
     showIdolSelection() {
         this._currentView = 'idol-selection';
+        (0, storage_1.updateCurrentView)(this._context, 'idol-selection');
         this._updateWebview();
+    }
+    /**
+     * Handle active file change - detect problem folder and auto-switch view
+     */
+    async handleActiveFileChange(fileUri) {
+        if (!this._serverReady)
+            return;
+        const filePath = fileUri.fsPath;
+        // Check if we're in a problem folder (format: {contestId}{index}_{ProblemName})
+        const match = filePath.match(/[/\\](\d+)([A-Z]\d?)[_]([^/\\]+)[/\\]/i);
+        if (!match)
+            return;
+        const contestId = parseInt(match[1]);
+        const index = match[2].toUpperCase();
+        const problemId = `${contestId}${index}`;
+        // If we're already viewing this problem, no need to reload
+        if (this._currentProblem &&
+            this._currentProblem.contestId === contestId &&
+            this._currentProblem.index === index) {
+            return;
+        }
+        // Try to load this problem
+        try {
+            const problem = await api.getProblemContent(contestId, index);
+            this._currentProblem = problem;
+            (0, storage_1.updateCurrentProblem)(this._context, problem);
+            this._currentView = 'problem-solving';
+            this._updateWebview();
+        }
+        catch (error) {
+            // Silently fail - user may be in a folder that looks like a problem but isn't
+            console.log(`Could not load problem ${problemId}:`, error);
+        }
+    }
+    /**
+     * Open the current problem in a webview panel for viewing and test extraction
+     */
+    _openProblemInWebview() {
+        if (!this._currentProblem) {
+            vscode.window.showWarningMessage('No problem selected');
+            return;
+        }
+        const problemId = `${this._currentProblem.contestId}${this._currentProblem.index}`;
+        const folderPath = (0, workspaceManager_1.getProblemFolderPath)(problemId, this._currentProblem.name);
+        ProblemPanel_1.ProblemPanel.createOrShow(this._extensionUri, this._currentProblem.contestId, this._currentProblem.index, this._currentProblem.name, folderPath || undefined);
     }
     async _handleLogin(handle) {
         try {
@@ -191,9 +256,17 @@ class SidebarProvider {
             this._sendMessage({ type: 'loading', loading: true });
             const problem = await api.getProblemContent(contestId, index);
             this._currentProblem = problem;
+            // Set up the workspace with folder and files
+            const problemId = `${contestId}${index}`;
+            await (0, workspaceManager_1.setupProblemWorkspace)(problemId, problem.name, problem.examples);
+            // Persist current problem state for restoration on restart
+            (0, storage_1.updateCurrentProblem)(this._context, problem);
             this._currentView = 'problem-solving';
             this._sendMessage({ type: 'loading', loading: false });
             this._updateWebview();
+            // Automatically open the problem in a webview panel
+            const folderPath = (0, workspaceManager_1.getProblemFolderPath)(problemId, problem.name);
+            ProblemPanel_1.ProblemPanel.createOrShow(this._extensionUri, contestId, index, problem.name, folderPath || undefined);
         }
         catch (error) {
             this._sendMessage({ type: 'loading', loading: false });
@@ -201,6 +274,58 @@ class SidebarProvider {
                 type: 'error',
                 message: 'Error loading problem: ' + (error.message || 'Unknown error')
             });
+        }
+    }
+    async _handleRunTests() {
+        if (!this._currentProblem) {
+            this._sendMessage({
+                type: 'testResults',
+                success: false,
+                error: 'No problem selected'
+            });
+            return;
+        }
+        const problemId = `${this._currentProblem.contestId}${this._currentProblem.index}`;
+        const folderPath = (0, workspaceManager_1.getProblemFolderPath)(problemId, this._currentProblem.name);
+        if (!folderPath) {
+            this._sendMessage({
+                type: 'testResults',
+                success: false,
+                error: 'Please open a folder to run tests'
+            });
+            return;
+        }
+        // Send running state
+        this._sendMessage({ type: 'testRunning', running: true });
+        try {
+            // Fallback fetch function to get tests from Codeforces if tests.json is missing
+            const fetchTestsFallback = async () => {
+                if (!this._currentProblem)
+                    return null;
+                try {
+                    const problem = await api.getProblemContent(this._currentProblem.contestId, this._currentProblem.index);
+                    return problem.examples || null;
+                }
+                catch (e) {
+                    return null;
+                }
+            };
+            const result = await testRunner_1.testRunner.runAllTests(folderPath, fetchTestsFallback);
+            this._sendMessage({
+                type: 'testResults',
+                ...result
+            });
+        }
+        catch (error) {
+            this._sendMessage({
+                type: 'testResults',
+                success: false,
+                error: error.message || 'Unknown error running tests'
+            });
+        }
+        finally {
+            // Always ensure we send testRunning: false to prevent stuck state
+            this._sendMessage({ type: 'testRunning', running: false });
         }
     }
     async _loadWorkspaceData() {

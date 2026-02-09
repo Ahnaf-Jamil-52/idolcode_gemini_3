@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import * as api from './api';
-import { getSession, saveSession, updateIdol, clearSession, StoredSession } from './storage';
+import { getSession, saveSession, updateIdol, clearSession, StoredSession, ViewState, getViewState, updateCurrentProblem, updateCurrentView } from './storage';
+import { setupProblemWorkspace, getProblemFolderPath } from './utils/workspaceManager';
+import { testRunner } from './runner/testRunner';
+import { ProblemPanel } from './webview/ProblemPanel';
 
-type ViewState = 'wakeup' | 'login' | 'idol-selection' | 'workspace' | 'problem-solving';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
@@ -52,6 +54,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'backToWorkspace':
                     this._currentView = 'workspace';
+                    updateCurrentView(this._context, 'workspace');
                     this._updateWebview();
                     break;
                 case 'changeIdol':
@@ -67,6 +70,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'retryWakeup':
                     await this._initializeServer();
+                    break;
+                case 'runTests':
+                    await this._handleRunTests();
+                    break;
+                case 'openProblemPanel':
+                    this._openProblemInWebview();
                     break;
             }
         });
@@ -86,7 +95,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             const session = getSession(this._context);
             if (session) {
                 if (session.idolHandle) {
-                    this._currentView = 'workspace';
+                    // Check for saved view state (e.g., problem-solving)
+                    const savedViewState = getViewState(this._context);
+                    if (savedViewState?.currentView === 'problem-solving' && savedViewState?.currentProblem) {
+                        // Restore to problem-solving view
+                        this._currentProblem = savedViewState.currentProblem;
+                        this._currentView = 'problem-solving';
+                    } else {
+                        this._currentView = 'workspace';
+                    }
                     await this._loadWorkspaceData();
                 } else {
                     this._currentView = 'idol-selection';
@@ -107,7 +124,65 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     public showIdolSelection() {
         this._currentView = 'idol-selection';
+        updateCurrentView(this._context, 'idol-selection');
         this._updateWebview();
+    }
+
+    /**
+     * Handle active file change - detect problem folder and auto-switch view
+     */
+    public async handleActiveFileChange(fileUri: vscode.Uri) {
+        if (!this._serverReady) return;
+
+        const filePath = fileUri.fsPath;
+
+        // Check if we're in a problem folder (format: {contestId}{index}_{ProblemName})
+        const match = filePath.match(/[/\\](\d+)([A-Z]\d?)[_]([^/\\]+)[/\\]/i);
+        if (!match) return;
+
+        const contestId = parseInt(match[1]);
+        const index = match[2].toUpperCase();
+        const problemId = `${contestId}${index}`;
+
+        // If we're already viewing this problem, no need to reload
+        if (this._currentProblem &&
+            this._currentProblem.contestId === contestId &&
+            this._currentProblem.index === index) {
+            return;
+        }
+
+        // Try to load this problem
+        try {
+            const problem = await api.getProblemContent(contestId, index);
+            this._currentProblem = problem;
+            updateCurrentProblem(this._context, problem);
+            this._currentView = 'problem-solving';
+            this._updateWebview();
+        } catch (error) {
+            // Silently fail - user may be in a folder that looks like a problem but isn't
+            console.log(`Could not load problem ${problemId}:`, error);
+        }
+    }
+
+    /**
+     * Open the current problem in a webview panel for viewing and test extraction
+     */
+    private _openProblemInWebview() {
+        if (!this._currentProblem) {
+            vscode.window.showWarningMessage('No problem selected');
+            return;
+        }
+
+        const problemId = `${this._currentProblem.contestId}${this._currentProblem.index}`;
+        const folderPath = getProblemFolderPath(problemId, this._currentProblem.name);
+
+        ProblemPanel.createOrShow(
+            this._extensionUri,
+            this._currentProblem.contestId,
+            this._currentProblem.index,
+            this._currentProblem.name,
+            folderPath || undefined
+        );
     }
 
     private async _handleLogin(handle: string) {
@@ -179,15 +254,94 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             this._sendMessage({ type: 'loading', loading: true });
             const problem = await api.getProblemContent(contestId, index);
             this._currentProblem = problem;
+
+            // Set up the workspace with folder and files
+            const problemId = `${contestId}${index}`;
+            await setupProblemWorkspace(
+                problemId,
+                problem.name,
+                problem.examples
+            );
+
+            // Persist current problem state for restoration on restart
+            updateCurrentProblem(this._context, problem);
+
             this._currentView = 'problem-solving';
             this._sendMessage({ type: 'loading', loading: false });
             this._updateWebview();
+
+            // Automatically open the problem in a webview panel
+            const folderPath = getProblemFolderPath(problemId, problem.name);
+            ProblemPanel.createOrShow(
+                this._extensionUri,
+                contestId,
+                index,
+                problem.name,
+                folderPath || undefined
+            );
         } catch (error: any) {
             this._sendMessage({ type: 'loading', loading: false });
             this._sendMessage({
                 type: 'error',
                 message: 'Error loading problem: ' + (error.message || 'Unknown error')
             });
+        }
+    }
+
+    private async _handleRunTests() {
+        if (!this._currentProblem) {
+            this._sendMessage({
+                type: 'testResults',
+                success: false,
+                error: 'No problem selected'
+            });
+            return;
+        }
+
+        const problemId = `${this._currentProblem.contestId}${this._currentProblem.index}`;
+        const folderPath = getProblemFolderPath(problemId, this._currentProblem.name);
+
+        if (!folderPath) {
+            this._sendMessage({
+                type: 'testResults',
+                success: false,
+                error: 'Please open a folder to run tests'
+            });
+            return;
+        }
+
+        // Send running state
+        this._sendMessage({ type: 'testRunning', running: true });
+
+        try {
+            // Fallback fetch function to get tests from Codeforces if tests.json is missing
+            const fetchTestsFallback = async () => {
+                if (!this._currentProblem) return null;
+                try {
+                    const problem = await api.getProblemContent(
+                        this._currentProblem.contestId,
+                        this._currentProblem.index
+                    );
+                    return problem.examples || null;
+                } catch (e) {
+                    return null;
+                }
+            };
+
+            const result = await testRunner.runAllTests(folderPath, fetchTestsFallback);
+            this._sendMessage({
+                type: 'testResults',
+                ...result
+            });
+        } catch (error: any) {
+            this._sendMessage({
+                type: 'testResults',
+                success: false,
+                error: error.message || 'Unknown error running tests'
+            });
+        } finally {
+            // Always ensure we send testRunning: false to prevent stuck state
+            this._sendMessage({ type: 'testRunning', running: false });
         }
     }
 
@@ -273,3 +427,4 @@ function getNonce() {
     }
     return text;
 }
+

@@ -17,6 +17,11 @@
     let wakeupStatus = 'Connecting to server...';
     let wakeupFailed = false;
 
+    // Test Runner State
+    let testResults = null;
+    let testsRunning = false;
+    let duckMood = 'neutral'; // 'neutral', 'happy', 'sad', 'thinking'
+
     // DOM Elements
     const content = document.getElementById('content');
     const loadingOverlay = document.getElementById('loading-overlay');
@@ -56,6 +61,19 @@
             case 'wakeupFailed':
                 wakeupFailed = true;
                 renderWakeup();
+                break;
+            case 'testResults':
+                testResults = message;
+                testsRunning = false;
+                updateDuckMood();
+                renderTestResults();
+                break;
+            case 'testRunning':
+                testsRunning = message.running;
+                if (testsRunning) {
+                    duckMood = 'thinking';
+                    renderTestRunning();
+                }
                 break;
         }
     });
@@ -377,72 +395,210 @@
                 <div class="problem-title">${problem.contestId}${problem.index}: ${problem.name}</div>
             </div>
             
-            <div class="problem-meta">
-                <span>${problem.timeLimit}</span>
-                <span>•</span>
-                <span>${problem.memoryLimit}</span>
-                ${problem.rating ? `<span>• <span class="${getRatingClass(problem.rating)}">${problem.rating}</span></span>` : ''}
+            <!-- Duck Coach Section -->
+            <div class="coach-panel">
+                <div class="duck-coach ${duckMood}">
+                    ${getDuckSVG(duckMood === 'happy' ? 'green' : duckMood === 'sad' ? 'red' : 'blue')}
+                    <div class="duck-speech" id="duck-speech">
+                        ${getDuckMessage()}
+                    </div>
+                </div>
             </div>
             
-            <div class="tags">
-                ${problem.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+            <!-- Test Runner Control Panel -->
+            <div class="control-panel">
+                <div class="test-controls">
+                    <button class="btn btn-run" id="run-tests-btn" ${testsRunning ? 'disabled' : ''}>
+                        ${testsRunning ? '⏳ Running...' : '▶ Run All Tests'}
+                    </button>
+                </div>
+                
+                <div id="test-results-container">
+                    ${renderTestResultsHTML()}
+                </div>
             </div>
             
-            <div class="problem-content">
-                <div class="problem-section">
-                    <h4>Problem Statement</h4>
+            <!-- Problem Essentials -->
+            <div class="problem-essentials">
+                <div class="problem-meta">
+                    <span>⏱️ ${problem.timeLimit}</span>
+                    <span>💾 ${problem.memoryLimit}</span>
+                    ${problem.rating ? `<span class="${getRatingClass(problem.rating)}">⭐ ${problem.rating}</span>` : ''}
+                </div>
+            </div>
+            
+            <!-- Collapsible Problem Statement -->
+            <details class="problem-details">
+                <summary>📖 Problem Statement</summary>
+                <div class="problem-content">
                     <p>${problem.problemStatement || 'No statement available.'}</p>
+                    
+                    ${problem.inputSpecification ? `
+                        <div class="problem-section">
+                            <h4>Input</h4>
+                            <p>${problem.inputSpecification}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${problem.outputSpecification ? `
+                        <div class="problem-section">
+                            <h4>Output</h4>
+                            <p>${problem.outputSpecification}</p>
+                        </div>
+                    ` : ''}
+                    
+                    ${problem.note ? `
+                        <div class="problem-section">
+                            <h4>Note</h4>
+                            <p>${problem.note}</p>
+                        </div>
+                    ` : ''}
                 </div>
-                
-                ${problem.inputSpecification ? `
-                    <div class="problem-section">
-                        <h4>Input</h4>
-                        <p>${problem.inputSpecification}</p>
-                    </div>
-                ` : ''}
-                
-                ${problem.outputSpecification ? `
-                    <div class="problem-section">
-                        <h4>Output</h4>
-                        <p>${problem.outputSpecification}</p>
-                    </div>
-                ` : ''}
-                
-                ${problem.examples.length > 0 ? `
-                    <div class="problem-section">
-                        <h4>Examples</h4>
-                        ${problem.examples.map((ex, i) => `
-                            <div class="problem-example">
-                                <div class="example-header">Input ${i + 1}</div>
-                                <div class="example-content">${escapeHtml(ex.input)}</div>
-                                <div class="example-header">Output ${i + 1}</div>
-                                <div class="example-content">${escapeHtml(ex.output)}</div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : ''}
-                
-                ${problem.note ? `
-                    <div class="problem-section">
-                        <h4>Note</h4>
-                        <p>${problem.note}</p>
-                    </div>
-                ` : ''}
-                
-                <a href="${problem.url}" class="external-link" target="_blank">Open on Codeforces ↗</a>
-            </div>
+            </details>
             
-            <div class="duck-section">
-                <div class="duck-container">
-                    ${getDuckSVG('blue')}
-                    <p class="duck-message">🦆 Need help? I'm here to guide you!</p>
+            <!-- Sample Tests Reference -->
+            <details class="problem-details" open>
+                <summary>🧪 Sample Tests (${problem.examples.length})</summary>
+                <div class="examples-compact">
+                    ${problem.examples.map((ex, i) => `
+                        <div class="example-compact">
+                            <div class="example-row">
+                                <div class="example-col">
+                                    <div class="example-label">Input ${i + 1}</div>
+                                    <pre class="example-code">${escapeHtml(ex.input)}</pre>
+                                </div>
+                                <div class="example-col">
+                                    <div class="example-label">Output ${i + 1}</div>
+                                    <pre class="example-code">${escapeHtml(ex.output)}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
-            </div>
+            </details>
+            
+            <a href="${problem.url}" class="external-link" target="_blank">Open on Codeforces ↗</a>
         `;
 
+        // Event listeners
         document.getElementById('back-btn').addEventListener('click', () => {
             vscode.postMessage({ type: 'backToWorkspace' });
         });
+
+        document.getElementById('run-tests-btn').addEventListener('click', () => {
+            testResults = null;
+            vscode.postMessage({ type: 'runTests' });
+        });
+    }
+
+    function getDuckMessage() {
+        if (testsRunning) {
+            return "🦆 Compiling and running tests...";
+        }
+        if (!testResults) {
+            return "🦆 Ready to test? Hit Run!";
+        }
+        if (!testResults.success) {
+            return `🦆 Oops! ${testResults.error || 'Something went wrong'}`;
+        }
+        const passed = testResults.results.filter(r => r.passed).length;
+        const total = testResults.results.length;
+        if (passed === total) {
+            return "🦆 All tests passed! Great job!";
+        }
+        return `🦆 ${passed}/${total} tests passed. Keep trying!`;
+    }
+
+    function updateDuckMood() {
+        if (!testResults || !testResults.success) {
+            duckMood = 'sad';
+            return;
+        }
+        const passed = testResults.results.filter(r => r.passed).length;
+        const total = testResults.results.length;
+        duckMood = passed === total ? 'happy' : 'sad';
+    }
+
+    function renderTestResultsHTML() {
+        if (testsRunning) {
+            return '<div class="test-running"><div class="spinner-small"></div> Running tests...</div>';
+        }
+        if (!testResults) {
+            return '<div class="test-placeholder">Click "Run All Tests" to start</div>';
+        }
+        if (!testResults.success) {
+            return `<div class="test-error">${escapeHtml(testResults.error)}</div>`;
+        }
+
+        return testResults.results.map(result => `
+            <details class="test-case-details ${result.passed ? 'pass' : 'fail'}" ${!result.passed ? 'open' : ''}>
+                <summary class="test-header">
+                    <span class="test-icon">${result.passed ? '✅' : '❌'}</span>
+                    <span class="test-name">Test ${result.id}</span>
+                    <span class="test-time">${result.time}ms</span>
+                </summary>
+                <div class="test-body">
+                    <div class="test-io-grid">
+                        <div class="test-io-section">
+                            <div class="io-label">📥 Input</div>
+                            <pre class="io-content">${escapeHtml(result.input)}</pre>
+                        </div>
+                        <div class="test-io-section">
+                            <div class="io-label">📤 Expected</div>
+                            <pre class="io-content expected">${escapeHtml(result.expected)}</pre>
+                        </div>
+                    </div>
+                    ${!result.passed ? `
+                        <div class="test-actual-section">
+                            <div class="io-label">❌ Actual Output</div>
+                            <pre class="io-content actual">${escapeHtml(result.actual)}</pre>
+                        </div>
+                    ` : `
+                        <div class="test-actual-section passed">
+                            <div class="io-label">✅ Your Output (Correct!)</div>
+                            <pre class="io-content correct">${escapeHtml(result.actual)}</pre>
+                        </div>
+                    `}
+                </div>
+            </details>
+        `).join('');
+    }
+
+    function renderTestResults() {
+        const container = document.getElementById('test-results-container');
+        const speech = document.getElementById('duck-speech');
+        const duckCoach = document.querySelector('.duck-coach');
+
+        if (container) {
+            container.innerHTML = renderTestResultsHTML();
+        }
+        if (speech) {
+            speech.innerHTML = getDuckMessage();
+        }
+        if (duckCoach) {
+            duckCoach.className = `duck-coach ${duckMood}`;
+        }
+    }
+
+    function renderTestRunning() {
+        const container = document.getElementById('test-results-container');
+        const speech = document.getElementById('duck-speech');
+        const runBtn = document.getElementById('run-tests-btn');
+        const duckCoach = document.querySelector('.duck-coach');
+
+        if (container) {
+            container.innerHTML = '<div class="test-running"><div class="spinner-small"></div> Compiling and running...</div>';
+        }
+        if (speech) {
+            speech.innerHTML = "🦆 Compiling and running tests...";
+        }
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.innerHTML = '⏳ Running...';
+        }
+        if (duckCoach) {
+            duckCoach.className = 'duck-coach thinking';
+        }
     }
 
     // Helpers
@@ -460,7 +616,8 @@
     }
 
     function getDuckSVG(mode) {
-        const color = mode === 'white' ? '#f0f0f0' : mode === 'blue' ? '#3b82f6' : '#ef4444';
+        const colorMap = { 'white': '#f0f0f0', 'blue': '#3b82f6', 'red': '#ef4444', 'green': '#22c55e' };
+        const color = colorMap[mode] || colorMap.blue;
         return `
             <svg viewBox="0 0 100 100" class="duck-mascot">
                 <ellipse cx="50" cy="60" rx="30" ry="25" fill="${color}" opacity="0.9"/>
