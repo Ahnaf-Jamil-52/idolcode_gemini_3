@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Failure Archetype Schema",
+  "description": "Schema for failure archetype detection and evidence",
+  "type": "object",
+  "required": [
+    "archetype",
+    "confidence",
+    "supporting_behaviors",
+    "problem_ids",
+    "timestamp"
+  ],
+  "properties": {
+    "archetype": {
+      "type": "string",
+      "description": "The detected failure archetype",
+      "enum": [
+        "brute_forcer",
+        "pattern_chaser",
+        "hesitator",
+        "overfitter",
+        "avoider",
+        "speed_demon",
+        "perfectionist",
+        "unknown"
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "description": "Confidence level (0.0 - 1.0)",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "supporting_behaviors": {
+      "type": "array",
+      "description": "List of observable behaviors supporting this detection",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "problem_ids": {
+      "type": "array",
+      "description": "Problems where this archetype was observed",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this archetype was detected"
+    }
+  },
+  "examples": [
+    {
+      "archetype": "brute_forcer",
+      "confidence": 0.85,
+      "supporting_behaviors": [
+        "Takes 1.8x longer than expected",
+        "Primarily fails with TLE, MLE",
+        "Overuses implementation, brute force"
+      ],
+      "problem_ids": [1234, 1456, 1789, 2001],
+      "timestamp": "2026-02-09T10:30:00Z"
+    }
+  ]
+}

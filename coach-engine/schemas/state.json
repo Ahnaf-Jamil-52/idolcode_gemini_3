@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Coach State Schema",
+  "description": "Schema for coach state machine and fusion results",
+  "type": "object",
+  "definitions": {
+    "coach_state": {
+      "type": "string",
+      "enum": ["normal", "watching", "warning", "protective", "recovery"],
+      "description": "Current state in the burnout detection state machine"
+    },
+    "burnout_level": {
+      "type": "string",
+      "enum": ["low", "moderate", "high", "critical"]
+    },
+    "trend_direction": {
+      "type": "string",
+      "enum": ["deteriorating", "stable", "recovering"]
+    },
+    "alignment": {
+      "type": "string",
+      "enum": ["genuine_good", "venting_ok", "masking", "confirmed", "silent"],
+      "description": "How behavioral and text signals align"
+    },
+    "intervention_level": {
+      "type": "string",
+      "enum": ["none", "monitor", "gentle", "active", "urgent"]
+    },
+    "burnout_score": {
+      "type": "object",
+      "required": ["score", "level", "timestamp"],
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "level": { "$ref": "#/definitions/burnout_level" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "contributing_signals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "signal": { "type": "string" },
+              "contribution": { "type": "number" }
+            }
+          }
+        },
+        "raw_weighted_sum": { "type": "number" },
+        "ema_smoothed": { "type": "number" }
+      }
+    },
+    "trend_analysis": {
+      "type": "object",
+      "properties": {
+        "direction": { "$ref": "#/definitions/trend_direction" },
+        "slope": { "type": "number" },
+        "r_squared": { "type": "number" },
+        "confidence": { "type": "number" },
+        "data_points": { "type": "integer" },
+        "predicted_next": { "type": "number" },
+        "sessions_to_critical": { "type": ["integer", "null"] }
+      }
+    },
+    "state_transition": {
+      "type": "object",
+      "required": ["from_state", "to_state", "timestamp", "trigger"],
+      "properties": {
+        "from_state": { "$ref": "#/definitions/coach_state" },
+        "to_state": { "$ref": "#/definitions/coach_state" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "trigger": { "type": "string" },
+        "burnout_score": { "type": "number" },
+        "trend_direction": { "$ref": "#/definitions/trend_direction" }
+      }
+    },
+    "fusion_result": {
+      "type": "object",
+      "required": ["alignment", "intervention_level", "composite_score", "current_state"],
+      "properties": {
+        "alignment": { "$ref": "#/definitions/alignment" },
+        "intervention_level": { "$ref": "#/definitions/intervention_level" },
+        "behavior_score": { "type": "number" },
+        "text_sentiment_score": { "type": "number" },
+        "trend_score": { "type": "number" },
+        "composite_score": { "type": "number" },
+        "current_state": { "$ref": "#/definitions/coach_state" },
+        "state_changed": { "type": "boolean" },
+        "is_masking": { "type": "boolean" },
+        "is_silent_disengagement": { "type": "boolean" },
+        "needs_immediate_attention": { "type": "boolean" },
+        "recommended_actions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "ghost_speed_modifier": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "coach_response": {
+      "type": "object",
+      "required": ["message", "strategy", "emotion_display", "priority"],
+      "properties": {
+        "message": { "type": "string" },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "validate_reframe",
+            "humanize_slow",
+            "suggest_rest",
+            "gentle_probe",
+            "amplify_success",
+            "initiate_contact",
+            "encourage_continue",
+            "stay_quiet"
+          ]
+        },
+        "emotion_display": { "type": "string" },
+        "priority": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "metadata": { "type": "object" }
+      }
+    }
+  },
+  "properties": {
+    "current_state": {
+      "type": "object",
+      "properties": {
+        "state": { "$ref": "#/definitions/coach_state" },
+        "entered_at": { "type": "string", "format": "date-time" },
+        "minutes_in_state": { "type": "number" },
+        "burnout_score": { "type": "number" },
+        "trend_direction": { "$ref": "#/definitions/trend_direction" }
+      }
+    },
+    "latest_fusion": { "$ref": "#/definitions/fusion_result" },
+    "transition_history": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/state_transition" }
+    },
+    "recommended_response": { "$ref": "#/definitions/coach_response" }
+  }
+}

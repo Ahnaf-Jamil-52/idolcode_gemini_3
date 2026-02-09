@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sentiment Analysis Schema",
+  "description": "Schema for sentiment analysis results",
+  "type": "object",
+  "definitions": {
+    "emotional_state": {
+      "type": "string",
+      "enum": [
+        "frustrated",
+        "discouraged",
+        "fatigued",
+        "neutral",
+        "motivated",
+        "celebrating",
+        "masked"
+      ],
+      "description": "Detected emotional state"
+    },
+    "pattern_category": {
+      "type": "string",
+      "enum": [
+        "frustration",
+        "giving_up",
+        "self_doubt",
+        "fatigue",
+        "confidence",
+        "joy",
+        "growth"
+      ]
+    },
+    "sentiment_result": {
+      "type": "object",
+      "required": ["state", "intensity", "confidence", "analysis_method", "timestamp"],
+      "properties": {
+        "state": { "$ref": "#/definitions/emotional_state" },
+        "intensity": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Intensity of the emotional state"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Confidence in the analysis"
+        },
+        "matched_patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": { "$ref": "#/definitions/pattern_category" },
+              "pattern": { "type": "string" }
+            }
+          }
+        },
+        "analysis_method": {
+          "type": "string",
+          "enum": ["keyword", "local_model", "llm"],
+          "description": "Method used for analysis"
+        },
+        "is_masked": {
+          "type": "boolean",
+          "description": "Whether user is masking true feelings"
+        },
+        "raw_text": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Truncated original text"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "message_source": {
+      "type": "string",
+      "enum": ["chat", "search", "comment", "session_name"],
+      "description": "Source of the analyzed text"
+    }
+  },
+  "properties": {
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "source", "timestamp", "result"],
+        "properties": {
+          "text": { "type": "string" },
+          "source": { "$ref": "#/definitions/message_source" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "result": { "$ref": "#/definitions/sentiment_result" }
+        }
+      }
+    },
+    "history_summary": {
+      "type": "object",
+      "properties": {
+        "total_messages": { "type": "integer" },
+        "state_distribution": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" }
+        },
+        "average_intensity": { "type": "number" },
+        "sentiment_declining": { "type": "boolean" }
+      }
+    }
+  }
+}

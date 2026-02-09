@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Problem Metadata Schema",
+  "description": "Complete metadata for algorithmic problems used in Cognitive Mirror system",
+  "type": "object",
+  "required": [
+    "problem_id",
+    "title",
+    "difficulty",
+    "tags",
+    "hidden_skills",
+    "cognitive_triggers",
+    "common_wrong_paths",
+    "failure_archetypes_targeted",
+    "historical_role",
+    "typical_solve_time_minutes"
+  ],
+  "properties": {
+    "problem_id": {
+      "type": "integer",
+      "description": "Unique problem identifier",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "description": "Problem title",
+      "minLength": 1
+    },
+    "difficulty": {
+      "type": "integer",
+      "description": "Codeforces-style rating (800-3500)",
+      "minimum": 800,
+      "maximum": 3500
+    },
+    "tags": {
+      "type": "array",
+      "description": "Official problem tags (visible)",
+      "items": {
+        "type": "string",
+        "enum": [
+          "dp",
+          "graphs",
+          "greedy",
+          "data_structures",
+          "math",
+          "strings",
+          "binary_search",
+          "two_pointers",
+          "sorting",
+          "bitmask",
+          "geometry",
+          "number_theory",
+          "constructive",
+          "implementation",
+          "brute force",
+          "dfs",
+          "bfs",
+          "trees",
+          "combinatorics"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "hidden_skills": {
+      "type": "array",
+      "description": "Skills not obvious from tags but required to solve",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "cognitive_triggers": {
+      "type": "array",
+      "description": "Mental challenges this problem poses",
+      "items": {
+        "type": "string",
+        "enum": [
+          "forces_abstraction",
+          "punishes_greedy_intuition",
+          "requires_observation",
+          "tests_edge_cases",
+          "needs_optimization",
+          "pattern_breaking",
+          "state_compression",
+          "transition_reuse",
+          "constraint_analysis",
+          "invariant_discovery"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "common_wrong_paths": {
+      "type": "array",
+      "description": "Common approaches that fail",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 0
+    },
+    "failure_archetypes_targeted": {
+      "type": "array",
+      "description": "Which failure archetypes this problem helps fix",
+      "items": {
+        "type": "string",
+        "enum": [
+          "brute_forcer",
+          "pattern_chaser",
+          "hesitator",
+          "overfitter",
+          "avoider",
+          "speed_demon",
+          "perfectionist"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "historical_role": {
+      "type": "string",
+      "description": "Role this problem plays in training trajectory",
+      "examples": [
+        "tourist_breakthrough_problem",
+        "stabilization_problem",
+        "foundational_concept",
+        "plateau_breaker"
+      ]
+    },
+    "typical_solve_time_minutes": {
+      "type": "integer",
+      "description": "Expected solve time for target difficulty level",
+      "minimum": 5,
+      "maximum": 180
+    },
+    "required_skills": {
+      "type": "array",
+      "description": "Skills that must be present to attempt",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "recommended_prerequisites": {
+      "type": "array",
+      "description": "Other problem IDs to solve first",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "uniqueItems": true
+    },
+    "source": {
+      "type": "string",
+      "description": "Problem source platform",
+      "default": "codeforces",
+      "examples": ["codeforces", "atcoder", "leetcode", "usaco"]
+    },
+    "url": {
+      "type": "string",
+      "description": "Direct URL to problem",
+      "format": "uri"
+    }
+  },
+  "examples": [
+    {
+      "problem_id": 1842,
+      "title": "Binary Game",
+      "difficulty": 1400,
+      "tags": ["dp", "bitmask"],
+      "hidden_skills": ["state compression", "transition reuse"],
+      "cognitive_triggers": [
+        "forces_abstraction",
+        "punishes_greedy_intuition"
+      ],
+      "common_wrong_paths": [
+        "bruteforce mask enumeration",
+        "wrong dp dimension"
+      ],
+      "failure_archetypes_targeted": [
+        "brute_forcer",
+        "pattern_chaser"
+      ],
+      "historical_role": "tourist_phase_2_stabilization",
+      "typical_solve_time_minutes": 35,
+      "required_skills": ["basic_dp", "bitwise_operations"],
+      "recommended_prerequisites": [455, 1234],
+      "source": "codeforces",
+      "url": "https://codeforces.com/problemset/problem/1842/C"
+    }
+  ]
+}

@@ -1,0 +1,264 @@
+[
+  {
+    "problem_id": 1842,
+    "title": "Binary Game",
+    "difficulty": 1400,
+    "tags": ["dp", "bitmask"],
+    "hidden_skills": ["state compression", "transition reuse"],
+    "cognitive_triggers": [
+      "forces_abstraction",
+      "punishes_greedy_intuition",
+      "state_compression"
+    ],
+    "common_wrong_paths": [
+      "bruteforce mask enumeration",
+      "wrong dp dimension",
+      "forgetting to memoize states"
+    ],
+    "failure_archetypes_targeted": [
+      "brute_forcer",
+      "pattern_chaser"
+    ],
+    "historical_role": "tourist_phase_2_stabilization",
+    "typical_solve_time_minutes": 35,
+    "required_skills": ["basic_dp", "bitwise_operations"],
+    "recommended_prerequisites": [455, 1234],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/1842/C"
+  },
+  {
+    "problem_id": 1500,
+    "title": "Path Counting",
+    "difficulty": 1200,
+    "tags": ["dp", "graphs"],
+    "hidden_skills": ["path enumeration", "memoization"],
+    "cognitive_triggers": [
+      "requires_observation",
+      "transition_reuse"
+    ],
+    "common_wrong_paths": [
+      "exponential recursion without memo",
+      "double counting paths"
+    ],
+    "failure_archetypes_targeted": [
+      "brute_forcer",
+      "hesitator"
+    ],
+    "historical_role": "foundational_concept",
+    "typical_solve_time_minutes": 25,
+    "required_skills": ["basic_recursion", "graph_traversal"],
+    "recommended_prerequisites": [],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/1500/A"
+  },
+  {
+    "problem_id": 1650,
+    "title": "Greedy Trap",
+    "difficulty": 1600,
+    "tags": ["greedy", "constructive"],
+    "hidden_skills": ["counterexample construction", "proof by contradiction"],
+    "cognitive_triggers": [
+      "punishes_greedy_intuition",
+      "pattern_breaking"
+    ],
+    "common_wrong_paths": [
+      "sorting by wrong criteria",
+      "greedy without proof",
+      "missing special cases"
+    ],
+    "failure_archetypes_targeted": [
+      "pattern_chaser",
+      "speed_demon"
+    ],
+    "historical_role": "plateau_breaker",
+    "typical_solve_time_minutes": 45,
+    "required_skills": ["greedy_algorithms", "proof_writing"],
+    "recommended_prerequisites": [1200, 1300],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/1650/C"
+  },
+  {
+    "problem_id": 800,
+    "title": "Array Sum",
+    "difficulty": 800,
+    "tags": ["implementation", "math"],
+    "hidden_skills": ["careful reading", "boundary conditions"],
+    "cognitive_triggers": [
+      "tests_edge_cases"
+    ],
+    "common_wrong_paths": [
+      "overflow on large inputs",
+      "off-by-one errors"
+    ],
+    "failure_archetypes_targeted": [
+      "speed_demon",
+      "overfitter"
+    ],
+    "historical_role": "confidence_builder",
+    "typical_solve_time_minutes": 10,
+    "required_skills": ["basic_loops"],
+    "recommended_prerequisites": [],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/800/A"
+  },
+  {
+    "problem_id": 1750,
+    "title": "Observation Problem",
+    "difficulty": 1500,
+    "tags": ["constructive", "math"],
+    "hidden_skills": ["pattern recognition", "mathematical insight"],
+    "cognitive_triggers": [
+      "requires_observation",
+      "invariant_discovery",
+      "pattern_breaking"
+    ],
+    "common_wrong_paths": [
+      "simulation instead of insight",
+      "missing the key observation",
+      "overcomplicating solution"
+    ],
+    "failure_archetypes_targeted": [
+      "brute_forcer",
+      "perfectionist",
+      "pattern_chaser"
+    ],
+    "historical_role": "thinking_style_transformer",
+    "typical_solve_time_minutes": 40,
+    "required_skills": ["mathematical_reasoning", "pattern_recognition"],
+    "recommended_prerequisites": [1200],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/1750/B"
+  },
+  {
+    "problem_id": 900,
+    "title": "String Manipulation",
+    "difficulty": 900,
+    "tags": ["strings", "implementation"],
+    "hidden_skills": ["string handling", "careful implementation"],
+    "cognitive_triggers": [
+      "tests_edge_cases"
+    ],
+    "common_wrong_paths": [
+      "index out of bounds",
+      "empty string cases",
+      "unicode issues"
+    ],
+    "failure_archetypes_targeted": [
+      "overfitter",
+      "speed_demon"
+    ],
+    "historical_role": "detail_training",
+    "typical_solve_time_minutes": 15,
+    "required_skills": ["string_operations"],
+    "recommended_prerequisites": [],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/900/A"
+  },
+  {
+    "problem_id": 1900,
+    "title": "Complex DP",
+    "difficulty": 1800,
+    "tags": ["dp", "data_structures"],
+    "hidden_skills": ["optimization layers", "state reduction"],
+    "cognitive_triggers": [
+      "forces_abstraction",
+      "needs_optimization",
+      "state_compression"
+    ],
+    "common_wrong_paths": [
+      "TLE on naive DP",
+      "missing optimization opportunity",
+      "wrong state definition"
+    ],
+    "failure_archetypes_targeted": [
+      "brute_forcer",
+      "hesitator",
+      "perfectionist"
+    ],
+    "historical_role": "advanced_mastery",
+    "typical_solve_time_minutes": 60,
+    "required_skills": ["advanced_dp", "segment_trees", "optimization"],
+    "recommended_prerequisites": [1500, 1650, 1842],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/1900/D"
+  },
+  {
+    "problem_id": 1100,
+    "title": "Binary Search Application",
+    "difficulty": 1100,
+    "tags": ["binary_search", "math"],
+    "hidden_skills": ["monotonicity detection", "predicate design"],
+    "cognitive_triggers": [
+      "requires_observation",
+      "constraint_analysis"
+    ],
+    "common_wrong_paths": [
+      "linear search TLE",
+      "wrong predicate function",
+      "off-by-one in boundaries"
+    ],
+    "failure_archetypes_targeted": [
+      "brute_forcer",
+      "pattern_chaser",
+      "overfitter"
+    ],
+    "historical_role": "technique_foundation",
+    "typical_solve_time_minutes": 20,
+    "required_skills": ["binary_search", "problem_modeling"],
+    "recommended_prerequisites": [800],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/1100/B"
+  },
+  {
+    "problem_id": 2000,
+    "title": "Graph Challenge",
+    "difficulty": 1700,
+    "tags": ["graphs", "dfs", "data_structures"],
+    "hidden_skills": ["tree manipulation", "ancestor tracking"],
+    "cognitive_triggers": [
+      "forces_abstraction",
+      "constraint_analysis"
+    ],
+    "common_wrong_paths": [
+      "wrong traversal order",
+      "missing cycle detection",
+      "incorrect data structure choice"
+    ],
+    "failure_archetypes_targeted": [
+      "pattern_chaser",
+      "perfectionist"
+    ],
+    "historical_role": "technique_integration",
+    "typical_solve_time_minutes": 50,
+    "required_skills": ["graph_algorithms", "dfs", "tree_algorithms"],
+    "recommended_prerequisites": [1500, 1650],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/2000/E"
+  },
+  {
+    "problem_id": 1300,
+    "title": "Two Pointer Technique",
+    "difficulty": 1300,
+    "tags": ["two_pointers", "greedy"],
+    "hidden_skills": ["sliding window", "pointer movement rules"],
+    "cognitive_triggers": [
+      "requires_observation",
+      "needs_optimization"
+    ],
+    "common_wrong_paths": [
+      "nested loops causing TLE",
+      "wrong pointer movement logic",
+      "missing window invariant"
+    ],
+    "failure_archetypes_targeted": [
+      "brute_forcer",
+      "avoider"
+    ],
+    "historical_role": "optimization_introduction",
+    "typical_solve_time_minutes": 30,
+    "required_skills": ["two_pointers", "sliding_window"],
+    "recommended_prerequisites": [900, 1100],
+    "source": "codeforces",
+    "url": "https://codeforces.com/problemset/problem/1300/C"
+  }
+]

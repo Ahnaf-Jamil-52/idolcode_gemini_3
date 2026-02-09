@@ -1,0 +1,156 @@
+[
+  {
+    "event_type": "session_start",
+    "timestamp": "2026-02-09T09:00:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {}
+  },
+  {
+    "event_type": "problem_opened",
+    "timestamp": "2026-02-09T09:01:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1400_a"}
+  },
+  {
+    "event_type": "submission",
+    "timestamp": "2026-02-09T09:10:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1400_a", "verdict": "WA"}
+  },
+  {
+    "event_type": "wrong_answer",
+    "timestamp": "2026-02-09T09:10:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1400_a"}
+  },
+  {
+    "event_type": "submission",
+    "timestamp": "2026-02-09T09:11:30Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1400_a", "verdict": "WA"}
+  },
+  {
+    "event_type": "wrong_answer",
+    "timestamp": "2026-02-09T09:11:30Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1400_a"}
+  },
+  {
+    "event_type": "submission",
+    "timestamp": "2026-02-09T09:12:45Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1400_a", "verdict": "WA"}
+  },
+  {
+    "event_type": "wrong_answer",
+    "timestamp": "2026-02-09T09:12:45Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1400_a"}
+  },
+  {
+    "event_type": "problem_skipped",
+    "timestamp": "2026-02-09T09:15:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1400_a"}
+  },
+  {
+    "event_type": "problem_opened",
+    "timestamp": "2026-02-09T09:15:30Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1500_b"}
+  },
+  {
+    "event_type": "ghost_race_result",
+    "timestamp": "2026-02-09T09:25:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1500_b", "won": false, "ghost_time": 180}
+  },
+  {
+    "event_type": "problem_skipped",
+    "timestamp": "2026-02-09T09:26:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1500_b"}
+  },
+  {
+    "event_type": "problem_opened",
+    "timestamp": "2026-02-09T09:27:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1600_c"}
+  },
+  {
+    "event_type": "ghost_race_result",
+    "timestamp": "2026-02-09T09:40:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1600_c", "won": false, "ghost_time": 240}
+  },
+  {
+    "event_type": "ghost_race_result",
+    "timestamp": "2026-02-09T09:55:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1600_d", "won": false, "ghost_time": 300}
+  },
+  {
+    "event_type": "hint_requested",
+    "timestamp": "2026-02-09T10:00:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"problem_id": "cf_1600_d"}
+  },
+  {
+    "event_type": "idle_detected",
+    "timestamp": "2026-02-09T10:25:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"idle_minutes": 25, "problem_id": "cf_1600_d"}
+  },
+  {
+    "event_type": "session_end",
+    "timestamp": "2026-02-09T10:30:00Z",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "metadata": {"duration_minutes": 90}
+  },
+  {
+    "event_type": "session_start",
+    "timestamp": "2026-02-09T14:00:00Z",
+    "user_id": "user_001",
+    "session_id": "session_002",
+    "metadata": {}
+  },
+  {
+    "event_type": "problem_opened",
+    "timestamp": "2026-02-09T14:02:00Z",
+    "user_id": "user_001",
+    "session_id": "session_002",
+    "metadata": {"problem_id": "cf_1200_e"}
+  },
+  {
+    "event_type": "problem_solved",
+    "timestamp": "2026-02-09T14:15:00Z",
+    "user_id": "user_001",
+    "session_id": "session_002",
+    "metadata": {"problem_id": "cf_1200_e", "time_taken_seconds": 780}
+  },
+  {
+    "event_type": "ghost_race_result",
+    "timestamp": "2026-02-09T14:15:00Z",
+    "user_id": "user_001",
+    "session_id": "session_002",
+    "metadata": {"problem_id": "cf_1200_e", "won": true}
+  }
+]

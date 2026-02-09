@@ -1,0 +1,113 @@
+[
+  {
+    "message_id": "msg_001",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "timestamp": "2026-02-09T09:05:00Z",
+    "source": "chat",
+    "text": "Let's do this! Feeling good today.",
+    "expected_state": "motivated"
+  },
+  {
+    "message_id": "msg_002",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "timestamp": "2026-02-09T09:13:00Z",
+    "source": "chat",
+    "text": "wtf why won't this work?? I've tried everything",
+    "expected_state": "frustrated"
+  },
+  {
+    "message_id": "msg_003",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "timestamp": "2026-02-09T09:28:00Z",
+    "source": "chat",
+    "text": "everyone else seems to get this instantly. I'm too dumb",
+    "expected_state": "discouraged"
+  },
+  {
+    "message_id": "msg_004",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "timestamp": "2026-02-09T09:45:00Z",
+    "source": "chat",
+    "text": "I'm fine, just gonna try the next one",
+    "expected_state": "masked",
+    "context_note": "Says fine but has 3 consecutive losses"
+  },
+  {
+    "message_id": "msg_005",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "timestamp": "2026-02-09T10:05:00Z",
+    "source": "chat",
+    "text": "whatever, I'm tired. don't care anymore",
+    "expected_state": "fatigued"
+  },
+  {
+    "message_id": "msg_006",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "timestamp": "2026-02-09T10:20:00Z",
+    "source": "chat",
+    "text": "last try then I quit",
+    "expected_state": "discouraged"
+  },
+  {
+    "message_id": "msg_007",
+    "user_id": "user_001",
+    "session_id": "session_002",
+    "timestamp": "2026-02-09T14:03:00Z",
+    "source": "chat",
+    "text": "fresh start, let's try easier problems",
+    "expected_state": "motivated"
+  },
+  {
+    "message_id": "msg_008",
+    "user_id": "user_001",
+    "session_id": "session_002",
+    "timestamp": "2026-02-09T14:16:00Z",
+    "source": "chat",
+    "text": "YES! Finally got one! This feels good",
+    "expected_state": "celebrating"
+  },
+  {
+    "message_id": "msg_009",
+    "user_id": "user_001",
+    "session_id": "session_002",
+    "timestamp": "2026-02-09T14:20:00Z",
+    "source": "chat",
+    "text": "I think I see the pattern now, makes sense",
+    "expected_state": "motivated"
+  },
+  {
+    "message_id": "msg_010",
+    "user_id": "user_002",
+    "session_id": "session_003",
+    "timestamp": "2026-02-09T15:00:00Z",
+    "source": "search",
+    "text": "easy problems for beginners",
+    "expected_state": "neutral",
+    "context_note": "Search query indicating retreat to easier content"
+  },
+  {
+    "message_id": "msg_011",
+    "user_id": "user_002",
+    "session_id": "session_003",
+    "timestamp": "2026-02-09T15:30:00Z",
+    "source": "comment",
+    "text": "// idk why this works but it does",
+    "expected_state": "neutral",
+    "context_note": "Code comment showing confusion"
+  },
+  {
+    "message_id": "msg_012",
+    "user_id": "user_001",
+    "session_id": "session_001",
+    "timestamp": "2026-02-09T09:50:00Z",
+    "source": "chat",
+    "text": "This is impossible. I can never learn this stuff.",
+    "expected_state": "discouraged"
+  }
+]
