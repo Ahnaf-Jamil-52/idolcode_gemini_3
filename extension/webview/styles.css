@@ -839,6 +839,148 @@ body {
     }
 }
 
+/* ===========================
+   COACH STATE MOODS (Phase 3)
+   =========================== */
+
+/* NORMAL state - teal/calm */
+.duck-coach.mood-normal .duck-mascot,
+.duck-container.mood-normal .duck-mascot {
+    filter: drop-shadow(0 0 10px rgba(45, 212, 191, 0.4));
+}
+
+.duck-container.mood-normal {
+    border: 3px solid #2DD4BF;
+    border-radius: 50%;
+    transition: all 0.5s ease;
+}
+
+/* WATCHING state - yellow/alert */
+.duck-coach.mood-watching .duck-mascot,
+.duck-container.mood-watching .duck-mascot {
+    filter: drop-shadow(0 0 12px rgba(252, 211, 77, 0.6));
+}
+
+.duck-container.mood-watching {
+    border: 3px solid #FCD34D;
+    border-radius: 50%;
+    transition: all 0.5s ease;
+}
+
+/* PROTECTIVE state - red/danger with pulse */
+.duck-coach.mood-protective .duck-mascot,
+.duck-container.mood-protective .duck-mascot {
+    filter: drop-shadow(0 0 20px rgba(244, 63, 94, 0.8));
+    animation: pulse-danger 1s infinite;
+}
+
+.duck-container.mood-protective {
+    border: 3px solid #F43F5E;
+    border-radius: 50%;
+    box-shadow: 0 0 20px rgba(244, 63, 94, 0.6);
+    transition: all 0.5s ease;
+}
+
+@keyframes pulse-danger {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+/* Coach Header */
+.coach-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.coach-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--muted-foreground);
+}
+
+.coach-state-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.coach-state-badge.state-normal {
+    background: rgba(45, 212, 191, 0.15);
+    color: #2DD4BF;
+}
+
+.coach-state-badge.state-watching {
+    background: rgba(252, 211, 77, 0.15);
+    color: #FCD34D;
+}
+
+.coach-state-badge.state-protective {
+    background: rgba(244, 63, 94, 0.15);
+    color: #F43F5E;
+    animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Burnout Bar */
+.burnout-bar-container {
+    margin-top: 10px;
+}
+
+.burnout-bar-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--muted-foreground);
+    margin-bottom: 4px;
+}
+
+.burnout-value {
+    font-weight: 600;
+}
+
+.burnout-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--muted);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.burnout-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease, background 0.5s ease;
+    min-width: 2px;
+}
+
+.burnout-bar-fill.burnout-low {
+    background: linear-gradient(90deg, #2DD4BF, #34D399);
+}
+
+.burnout-bar-fill.burnout-medium {
+    background: linear-gradient(90deg, #FCD34D, #FBBF24);
+}
+
+.burnout-bar-fill.burnout-high {
+    background: linear-gradient(90deg, #F43F5E, #EF4444);
+}
+
 /* Control Panel Container */
 .control-panel {
     background: var(--muted);
@@ -1196,4 +1338,48 @@ body {
 
 .test-actual-section.passed .io-label {
     color: #22c55e;
+}
+
+/* ==================== VOICE CONTROLS ==================== */
+.voice-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+}
+
+.btn-mic {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.btn-mic:hover {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    transform: scale(1.03);
+}
+
+.btn-mic.recording-active {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    animation: pulse-recording 1s ease-in-out infinite;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+}
+
+@keyframes pulse-recording {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.voice-status {
+    font-size: 12px;
+    color: var(--vscode-descriptionForeground, #888);
+    font-style: italic;
 }

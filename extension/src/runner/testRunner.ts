@@ -2,6 +2,7 @@ import * as cp from 'child_process';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { CoachClient } from '../utils/CoachClient';
 
 export interface TestResult {
     id: number;
@@ -20,6 +21,16 @@ export interface RunResult {
 }
 
 export class TestRunner {
+    // Track consecutive failures for coach integration
+    private consecutiveFailures: number = 0;
+    private currentProblemId: string = '';
+
+    /**
+     * Set the current problem ID for context in coach signals
+     */
+    setProblemContext(problemId: string) {
+        this.currentProblemId = problemId;
+    }
 
     /**
      * Compile C++ file using g++
@@ -166,6 +177,42 @@ export class TestRunner {
                 fs.unlinkSync(exePath);
             } catch (e) {
                 // Ignore cleanup errors
+            }
+
+            // ==================== COACH INTEGRATION ====================
+            const allPassed = results.every(r => r.passed);
+            const failedCount = results.filter(r => !r.passed).length;
+
+            if (allPassed) {
+                // Reset consecutive failures on success
+                this.consecutiveFailures = 0;
+                CoachClient.sendSignal('run_success', 1, {
+                    problem_id: this.currentProblemId,
+                    tests_passed: results.length
+                });
+                console.log(`✅ All tests passed - coach notified`);
+            } else {
+                // Increment consecutive failures
+                this.consecutiveFailures++;
+
+                // Send signal on first failure or repeated failures
+                if (this.consecutiveFailures >= 3) {
+                    // 🚨 TRIGGER: Repeated failures = potential frustration
+                    CoachClient.sendSignal('repeated_failure', this.consecutiveFailures, {
+                        problem_id: this.currentProblemId,
+                        failed_tests: failedCount,
+                        total_tests: results.length,
+                        error_type: 'wrong_answer'
+                    });
+                    console.log(`🔥 Repeated failures (${this.consecutiveFailures}) - coach notified`);
+                } else {
+                    // Single failure
+                    CoachClient.sendSignal('run_failure', 1, {
+                        problem_id: this.currentProblemId,
+                        failed_tests: failedCount,
+                        consecutive: this.consecutiveFailures
+                    });
+                }
             }
 
             return { success: true, results };

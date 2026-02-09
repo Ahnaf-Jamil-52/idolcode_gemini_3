@@ -4,6 +4,8 @@ import { getSession, saveSession, updateIdol, clearSession, StoredSession, ViewS
 import { setupProblemWorkspace, getProblemFolderPath } from './utils/workspaceManager';
 import { testRunner } from './runner/testRunner';
 import { ProblemPanel } from './webview/ProblemPanel';
+import { CoachClient } from './utils/CoachClient';
+import { VoiceRecorder } from './utils/VoiceRecorder';
 
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
@@ -14,6 +16,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     private _comparison?: api.ComparisonData;
     private _userSolvedProblems: Set<string> = new Set();
     private _serverReady: boolean = false;
+    private _voiceRecorder: VoiceRecorder | null = null;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -36,6 +39,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         this._currentView = 'wakeup';
 
         webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+
+        // Set up CoachClient state update callback (Phase 3: Feedback Loop)
+        CoachClient.setStateUpdateCallback((state, burnoutScore) => {
+            this._sendMessage({
+                type: 'updateCoachState',
+                value: { state, burnoutScore }
+            });
+        });
 
         // Handle messages from webview
         webviewView.webview.onDidReceiveMessage(async (data) => {
@@ -76,6 +87,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'openProblemPanel':
                     this._openProblemInWebview();
+                    break;
+                case 'onChatSubmit':
+                    await this._handleChatMessage(data.value);
+                    break;
+                case 'startRecording':
+                    this._handleStartRecording();
+                    break;
+                case 'stopRecording':
+                    await this._handleStopRecording();
                     break;
             }
         });
@@ -196,6 +216,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             };
             saveSession(this._context, session);
 
+            // Set user handle for coach client
+            CoachClient.setUserHandle(handle);
+
             this._currentView = 'idol-selection';
             this._sendMessage({ type: 'loading', loading: false });
             this._updateWebview();
@@ -265,6 +288,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
             // Persist current problem state for restoration on restart
             updateCurrentProblem(this._context, problem);
+
+            // Phase 4: Set problem context for AI-aware coaching
+            CoachClient.setCurrentProblem(problemId);
+
 
             this._currentView = 'problem-solving';
             this._sendMessage({ type: 'loading', loading: false });
@@ -363,6 +390,96 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             this._userSolvedProblems = new Set(solved);
         } catch (error) {
             console.error('Error loading workspace data:', error);
+        }
+    }
+
+    /**
+     * Handle chat message from webview - sends to coach and gets response
+     */
+    private async _handleChatMessage(message: string) {
+        if (!message || message.trim().length === 0) { return; }
+
+        try {
+            // Send to coach and get response
+            const response = await CoachClient.sendChat(message);
+
+            // Send reply back to webview
+            this._sendMessage({
+                type: 'addChatMessage',
+                value: {
+                    sender: 'coach',
+                    text: response.reply,
+                    sentiment: response.detected_sentiment
+                }
+            });
+        } catch (error: any) {
+            console.error('Error sending chat message:', error);
+            this._sendMessage({
+                type: 'addChatMessage',
+                value: {
+                    sender: 'coach',
+                    text: "I'm having trouble connecting. Try again in a moment.",
+                    sentiment: 'error'
+                }
+            });
+        }
+    }
+
+    /**
+     * Start recording audio from the microphone via the extension host
+     */
+    private _handleStartRecording(): void {
+        try {
+            this._voiceRecorder = new VoiceRecorder();
+            this._voiceRecorder.start();
+            this._sendMessage({ type: 'voiceStatus', value: 'recording' });
+        } catch (error: any) {
+            console.error('Failed to start recording:', error);
+            this._sendMessage({ type: 'voiceStatus', value: 'error' });
+        }
+    }
+
+    /**
+     * Stop recording, send audio to coach voice endpoint, return reply
+     */
+    private async _handleStopRecording(): Promise<void> {
+        if (!this._voiceRecorder) { return; }
+
+        try {
+            this._sendMessage({ type: 'voiceStatus', value: 'processing' });
+
+            const audioBase64 = await this._voiceRecorder.stop();
+
+            // Grab the active editor's code for context
+            const editor = vscode.window.activeTextEditor;
+            const codeContext = editor ? editor.document.getText() : '';
+
+            const response = await CoachClient.sendVoice(audioBase64, codeContext);
+
+            // Send the AI reply back to the webview
+            this._sendMessage({
+                type: 'addChatMessage',
+                value: {
+                    sender: 'coach',
+                    text: response.reply,
+                    sentiment: 'voice'
+                }
+            });
+            this._sendMessage({ type: 'voiceStatus', value: 'idle' });
+        } catch (error: any) {
+            console.error('Error processing voice:', error);
+            this._sendMessage({
+                type: 'addChatMessage',
+                value: {
+                    sender: 'coach',
+                    text: "I couldn't process your voice. Try again in a moment.",
+                    sentiment: 'error'
+                }
+            });
+            this._sendMessage({ type: 'voiceStatus', value: 'idle' });
+        } finally {
+            this._voiceRecorder?.dispose();
+            this._voiceRecorder = null;
         }
     }
 

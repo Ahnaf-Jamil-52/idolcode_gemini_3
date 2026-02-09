@@ -22,6 +22,10 @@
     let testsRunning = false;
     let duckMood = 'neutral'; // 'neutral', 'happy', 'sad', 'thinking'
 
+    // Coach State (Phase 3)
+    let coachState = 'NORMAL'; // 'NORMAL', 'WATCHING', 'PROTECTIVE'
+    let burnoutScore = 0;
+
     // DOM Elements
     const content = document.getElementById('content');
     const loadingOverlay = document.getElementById('loading-overlay');
@@ -74,6 +78,12 @@
                     duckMood = 'thinking';
                     renderTestRunning();
                 }
+                break;
+            case 'updateCoachState':
+                // Phase 3: Update duck mood based on coach state
+                coachState = message.value.state || 'NORMAL';
+                burnoutScore = message.value.burnoutScore || 0;
+                updateCoachMood();
                 break;
         }
     });
@@ -397,10 +407,23 @@
             
             <!-- Duck Coach Section -->
             <div class="coach-panel">
-                <div class="duck-coach ${duckMood}">
-                    ${getDuckSVG(duckMood === 'happy' ? 'green' : duckMood === 'sad' ? 'red' : 'blue')}
+                <div class="coach-header">
+                    <span class="coach-label">🧠 Coach</span>
+                    <span class="coach-state-badge ${getCoachStateClass()}" id="coach-state-badge">${getCoachStateLabel()}</span>
+                </div>
+                <div class="duck-coach ${duckMood} ${getCoachMoodClass()}">
+                    ${getDuckSVG(getCoachDuckColor())}
                     <div class="duck-speech" id="duck-speech">
-                        ${getDuckMessage()}
+                        ${getCoachMessage()}
+                    </div>
+                </div>
+                <div class="burnout-bar-container">
+                    <div class="burnout-bar-label">
+                        <span>Burnout Level</span>
+                        <span class="burnout-value" id="burnout-indicator">${Math.round(burnoutScore * 100)}%</span>
+                    </div>
+                    <div class="burnout-bar">
+                        <div class="burnout-bar-fill ${getBurnoutBarClass()}" id="burnout-bar-fill" style="width: ${Math.round(burnoutScore * 100)}%"></div>
                     </div>
                 </div>
             </div>
@@ -411,6 +434,14 @@
                     <button class="btn btn-run" id="run-tests-btn" ${testsRunning ? 'disabled' : ''}>
                         ${testsRunning ? '⏳ Running...' : '▶ Run All Tests'}
                     </button>
+                </div>
+
+                <!-- Voice Controls -->
+                <div class="voice-controls">
+                    <button class="btn btn-mic" id="mic-btn" title="Hold to talk to coach">
+                        🎙️ Hold to Talk
+                    </button>
+                    <span class="voice-status" id="voice-status"></span>
                 </div>
                 
                 <div id="test-results-container">
@@ -489,7 +520,69 @@
             testResults = null;
             vscode.postMessage({ type: 'runTests' });
         });
+
+        // Voice mic: hold-to-record
+        setupMicButton();
     }
+
+    // ==================== VOICE RECORDING ====================
+    // Recording happens on the extension host (Node.js) since VS Code
+    // webviews block navigator.mediaDevices.getUserMedia.
+    let isRecording = false;
+
+    function setupMicButton() {
+        const micBtn = document.getElementById('mic-btn');
+        const voiceStatus = document.getElementById('voice-status');
+        if (!micBtn) return;
+
+        micBtn.addEventListener('mousedown', () => {
+            if (isRecording) return;
+            isRecording = true;
+            micBtn.classList.add('recording-active');
+            micBtn.textContent = '🔴 Recording...';
+            if (voiceStatus) voiceStatus.textContent = 'Listening...';
+            vscode.postMessage({ type: 'startRecording' });
+        });
+
+        micBtn.addEventListener('mouseup', stopRecording);
+        micBtn.addEventListener('mouseleave', stopRecording);
+
+        function stopRecording() {
+            if (!isRecording) return;
+            isRecording = false;
+            micBtn.classList.remove('recording-active');
+            micBtn.textContent = '🎙️ Hold to Talk';
+            vscode.postMessage({ type: 'stopRecording' });
+        }
+    }
+
+    // Handle voice status + chat replies from the extension host
+    window.addEventListener('message', event => {
+        const msg = event.data;
+
+        if (msg.type === 'voiceStatus') {
+            const voiceStatus = document.getElementById('voice-status');
+            const micBtn = document.getElementById('mic-btn');
+            if (msg.value === 'processing' && voiceStatus) {
+                voiceStatus.textContent = '⏳ Thinking...';
+            } else if (msg.value === 'error' && voiceStatus) {
+                voiceStatus.textContent = '⚠️ Mic error';
+            } else if (msg.value === 'idle' && voiceStatus) {
+                voiceStatus.textContent = '';
+            }
+        }
+
+        if (msg.type === 'addChatMessage') {
+            const voiceStatus = document.getElementById('voice-status');
+            if (voiceStatus) voiceStatus.textContent = '';
+
+            // Show the reply in the duck speech bubble
+            const speech = document.getElementById('duck-speech');
+            if (speech && msg.value && msg.value.text) {
+                speech.textContent = msg.value.text;
+            }
+        }
+    });
 
     function getDuckMessage() {
         if (testsRunning) {
@@ -509,6 +602,70 @@
         return `🦆 ${passed}/${total} tests passed. Keep trying!`;
     }
 
+    // Coach state helpers
+    function getCoachMessage() {
+        // If there are test results, show test-related message
+        if (testsRunning) return "🧠 Running tests... let's see how it goes.";
+        if (testResults) {
+            if (!testResults.success) return `🧠 Something went wrong. Take a breath, then try again.`;
+            const passed = testResults.results.filter(r => r.passed).length;
+            const total = testResults.results.length;
+            if (passed === total) return "🧠 Perfect! All tests passed! You're on fire! 🔥";
+        }
+        // Otherwise show coach state message
+        switch (coachState) {
+            case 'WATCHING':
+            case 'WARNING':
+                return "🧠 I notice you're struggling a bit. That's totally normal — take your time.";
+            case 'PROTECTIVE':
+                return "🧠 Hey, you've been pushing hard. Maybe take a short break? Your brain needs rest too.";
+            default:
+                if (burnoutScore > 0.3) return "🧠 You're doing well, but remember to pace yourself.";
+                return "🧠 You're doing great! Keep it up.";
+        }
+    }
+
+    function getCoachStateClass() {
+        switch (coachState) {
+            case 'WATCHING': case 'WARNING': return 'state-watching';
+            case 'PROTECTIVE': return 'state-protective';
+            default: return 'state-normal';
+        }
+    }
+
+    function getCoachStateLabel() {
+        switch (coachState) {
+            case 'WATCHING': return '👀 Watching';
+            case 'WARNING': return '⚠️ Warning';
+            case 'PROTECTIVE': return '🛡️ Protective';
+            default: return '✅ Normal';
+        }
+    }
+
+    function getCoachMoodClass() {
+        switch (coachState) {
+            case 'WATCHING': case 'WARNING': return 'mood-watching';
+            case 'PROTECTIVE': return 'mood-protective';
+            default: return 'mood-normal';
+        }
+    }
+
+    function getCoachDuckColor() {
+        if (duckMood === 'happy') return 'green';
+        if (duckMood === 'sad') return 'red';
+        switch (coachState) {
+            case 'WATCHING': case 'WARNING': return 'orange';
+            case 'PROTECTIVE': return 'red';
+            default: return 'blue';
+        }
+    }
+
+    function getBurnoutBarClass() {
+        if (burnoutScore > 0.6) return 'burnout-high';
+        if (burnoutScore > 0.4) return 'burnout-medium';
+        return 'burnout-low';
+    }
+
     function updateDuckMood() {
         if (!testResults || !testResults.success) {
             duckMood = 'sad';
@@ -517,6 +674,59 @@
         const passed = testResults.results.filter(r => r.passed).length;
         const total = testResults.results.length;
         duckMood = passed === total ? 'happy' : 'sad';
+    }
+
+    // Phase 3: Update duck visual based on coach state
+    function updateCoachMood() {
+        const duckContainers = document.querySelectorAll('.duck-container, .duck-coach');
+
+        duckContainers.forEach(container => {
+            // Remove existing mood classes
+            container.classList.remove('mood-normal', 'mood-watching', 'mood-protective');
+
+            // Apply new mood based on coach state
+            switch (coachState) {
+                case 'NORMAL':
+                    container.classList.add('mood-normal');
+                    break;
+                case 'WATCHING':
+                case 'WARNING':
+                    container.classList.add('mood-watching');
+                    break;
+                case 'PROTECTIVE':
+                    container.classList.add('mood-protective');
+                    break;
+            }
+        });
+
+        // Update burnout indicator
+        const burnoutIndicator = document.getElementById('burnout-indicator');
+        if (burnoutIndicator) {
+            burnoutIndicator.textContent = `${Math.round(burnoutScore * 100)}%`;
+        }
+
+        // Update burnout bar
+        const burnoutBarFill = document.getElementById('burnout-bar-fill');
+        if (burnoutBarFill) {
+            burnoutBarFill.style.width = `${Math.round(burnoutScore * 100)}%`;
+            burnoutBarFill.classList.remove('burnout-high', 'burnout-medium', 'burnout-low');
+            burnoutBarFill.classList.add(getBurnoutBarClass());
+        }
+
+        // Update coach state badge
+        const badge = document.getElementById('coach-state-badge');
+        if (badge) {
+            badge.className = `coach-state-badge ${getCoachStateClass()}`;
+            badge.textContent = getCoachStateLabel();
+        }
+
+        // Update duck speech
+        const speech = document.getElementById('duck-speech');
+        if (speech) {
+            speech.textContent = getCoachMessage();
+        }
+
+        console.log(`🦆 Coach mood updated: ${coachState} (burnout: ${burnoutScore.toFixed(2)})`);
     }
 
     function renderTestResultsHTML() {

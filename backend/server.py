@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Query
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import certifi
 import os
 import logging
 from pathlib import Path
@@ -14,15 +15,26 @@ import asyncio
 import re
 from bs4 import BeautifulSoup
 
+# Coach Engine imports
+from models.coach_state import CoachStateModel, SignalRequest, SignalResponse, ChatRequest, ChatResponse, VoiceRequest, VoiceResponse
+from services.coach_core.fusion import FusionEngine
+from services.coach_core.responses import ResponseSelector
+from services.coach_core.gemini_analyzer import GeminiCoachAnalyzer
+
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+# Load .env.local first (local overrides), then .env as fallback
+env_local = ROOT_DIR / '.env.local'
+env_file = ROOT_DIR / '.env'
+if env_local.exists():
+    load_dotenv(env_local, override=True)
+elif env_file.exists():
+    load_dotenv(env_file)
 
 # MongoDB connection
-# Use .get() with defaults for local dev, production will override via env vars
-mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ.get('DB_NAME', 'test_database')]
+mongo_url = os.environ.get('MONGODB_URI', 'mongodb://localhost:27017')
+client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
+db = client[os.environ.get('DATABASE_NAME', 'idolcode')]
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -696,6 +708,217 @@ async def create_status_check(input: StatusCheckCreate):
     _ = await db.status_checks.insert_one(doc)
     return status_obj
 
+
+# ==================== COACH ENGINE ENDPOINTS ====================
+# The FusionEngine instance - rehydrated per request
+coach_engine = FusionEngine()
+# Gemini analyzer for AI-powered responses (Phase 4)
+gemini_analyzer = GeminiCoachAnalyzer()
+
+@api_router.post("/coach/signal", response_model=SignalResponse)
+async def process_coach_signal(request: SignalRequest):
+    """
+    Process a behavioral signal from the user.
+    
+    Signal types:
+    - run_failure/test_failure: User's code failed a test
+    - problem_solved: User solved a problem
+    - problem_skipped: User skipped a problem
+    - ghost_race_won/ghost_race_lost: Ghost race result
+    - idle: User has been idle (value = minutes)
+    - hint_requested: User asked for a hint
+    - chat: User sent a chat message (include 'message' field)
+    """
+    collection = db.coach_sessions
+    
+    # 1. Fetch existing state from MongoDB
+    state_doc = await collection.find_one({"user_handle": request.user_handle})
+    
+    if not state_doc:
+        state_doc = CoachStateModel(user_handle=request.user_handle).model_dump()
+    else:
+        state_doc.pop("_id", None)
+    
+    # 2. Hydrate the Engine
+    coach_engine.load_context(state_doc)
+    
+    # 3. Process the new signal
+    result = coach_engine.process_signal(
+        signal_type=request.signal_type,
+        value=request.value,
+        metadata=request.metadata,
+        message=request.message
+    )
+    
+    # 4. Export and persist new state
+    new_state = coach_engine.export_context()
+    new_state["user_handle"] = request.user_handle
+    new_state["last_updated"] = datetime.now(timezone.utc)
+    
+    await collection.update_one(
+        {"user_handle": request.user_handle},
+        {"$set": new_state},
+        upsert=True
+    )
+    
+    # 5. Return response
+    return SignalResponse(
+        status="processed",
+        new_burnout_score=result["burnout_score"],
+        current_state=result["current_state"],
+        intervention_level=result["intervention_level"],
+        ghost_speed_modifier=result["ghost_speed_modifier"],
+        is_masking=result["is_masking"],
+        needs_attention=result["needs_attention"],
+        coach_response=result["coach_response"],
+        recommended_actions=result["recommended_actions"]
+    )
+
+
+@api_router.get("/coach/state/{user_handle}")
+async def get_coach_state(user_handle: str):
+    """Get current coach state for a user."""
+    collection = db.coach_sessions
+    state_doc = await collection.find_one({"user_handle": user_handle})
+    
+    if not state_doc:
+        raise HTTPException(status_code=404, detail="No coach session found")
+    
+    state_doc.pop("_id", None)
+    return state_doc
+
+
+@api_router.delete("/coach/state/{user_handle}")
+async def reset_coach_state(user_handle: str):
+    """Reset/delete coach state for a user."""
+    collection = db.coach_sessions
+    result = await collection.delete_one({"user_handle": user_handle})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="No coach session found")
+    
+    return {"status": "deleted", "user_handle": user_handle}
+
+
+# Initialize response selector for generating coach replies
+response_selector = ResponseSelector()
+
+@api_router.post("/coach/chat", response_model=ChatResponse)
+async def chat_with_coach(request: ChatRequest):
+    """
+    Send a chat message to the coach and get a response.
+    
+    Phase 4: Uses Gemini AI with problem context for intelligent responses.
+    
+    This endpoint:
+    1. Fetches problem context if current_problem_id provided
+    2. Processes the message for sentiment
+    3. Generates AI-powered contextual response
+    """
+    collection = db.coach_sessions
+    
+    # 1. Fetch existing state from MongoDB
+    state_doc = await collection.find_one({"user_handle": request.user_handle})
+    
+    if not state_doc:
+        state_doc = CoachStateModel(user_handle=request.user_handle).model_dump()
+    else:
+        state_doc.pop("_id", None)
+    
+    # 2. Hydrate the Engine
+    coach_engine.load_context(state_doc)
+    
+    # 3. Process the message (includes sentiment analysis)
+    result = coach_engine.process_signal(
+        signal_type="chat",
+        value=0,
+        metadata={},
+        message=request.text
+    )
+    
+    # 4. Fetch problem context if available (Phase 4: Context Injection)
+    problem_context = None
+    if request.current_problem_id:
+        # Try to get problem from our scraped problems collection
+        problem_context = await db.problems.find_one({"problemId": request.current_problem_id})
+        if problem_context:
+            problem_context.pop("_id", None)
+            print(f"📚 Problem context loaded: {request.current_problem_id}")
+        else:
+            print(f"⚠️  Problem not found in cache: {request.current_problem_id}")
+    
+    # 5. Generate AI-powered response with context
+    state = result.get("current_state", "NORMAL")
+    score = result.get("burnout_score", 0.0)
+    emotional_trend = coach_engine.export_context().get("emotional_trend", [])
+    sentiment = emotional_trend[-1] if emotional_trend else "NEUTRAL"
+    
+    # Use Gemini for response generation
+    reply = await gemini_analyzer.generate_chat_response(
+        user_message=request.text,
+        coach_state=state,
+        sentiment=sentiment,
+        burnout_score=score,
+        problem_context=problem_context
+    )
+    
+    # 6. Export and persist new state
+    new_state = coach_engine.export_context()
+    new_state["user_handle"] = request.user_handle
+    new_state["last_updated"] = datetime.now(timezone.utc)
+    
+    await collection.update_one(
+        {"user_handle": request.user_handle},
+        {"$set": new_state},
+        upsert=True
+    )
+    
+    return ChatResponse(
+        reply=reply,
+        detected_sentiment=sentiment,
+        burnout_score=score,
+        intervention_level=result.get("intervention_level", "none")
+    )
+
+
+# ==================== VOICE INTERFACE ====================
+@api_router.post("/coach/voice", response_model=VoiceResponse)
+async def voice_query(request: VoiceRequest):
+    """
+    Process a voice recording via Gemini 1.5 Pro multimodal.
+
+    Flow: Mic audio (Base64 webm) → Gemini → coaching response.
+    """
+    # 1. Fetch problem context if provided
+    problem_context = None
+    if request.problem_id:
+        problem_context = await db.problems.find_one({"problemId": request.problem_id})
+        if problem_context:
+            problem_context.pop("_id", None)
+
+    # 2. Generate voice response via Gemini multimodal
+    reply = await gemini_analyzer.generate_voice_response(
+        audio_base64=request.audio_data,
+        code_context=request.code_context,
+        problem_context=problem_context,
+        audio_format=request.audio_format
+    )
+
+    # 3. Update burnout state from voice interaction
+    collection = db.coach_sessions
+    state_doc = await collection.find_one({"user_handle": request.user_handle})
+    burnout = 0.0
+    if state_doc:
+        burnout = state_doc.get("burnout_score", 0.0)
+
+    return VoiceResponse(
+        reply=reply,
+        detected_intent="voice_query",
+        burnout_score=burnout
+    )
+
+
+# ==================== STATUS CHECKS ====================
 @api_router.get("/status", response_model=List[StatusCheck])
 async def get_status_checks(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
