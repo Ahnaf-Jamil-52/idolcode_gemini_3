@@ -5,32 +5,32 @@ export const HowItWorks = () => {
   const steps = [
     {
       icon: Search,
-      title: 'Search Coders',
-      description: 'Find and explore top competitive programmers from Codeforces by username or ranking.',
+      title: 'Search by Username',
+      description: 'Find any Codeforces user by their username and set them as your coding idol to follow.',
       step: '01',
     },
     {
       icon: UserPlus,
-      title: 'Follow & Track',
-      description: 'Add your favorite coders to your personalized dashboard and start tracking their journey.',
+      title: 'Get Recommendations',
+      description: 'Receive personalized problem suggestions based on your idol\'s strengths and your areas to improve.',
       step: '02',
     },
     {
       icon: BarChart3,
-      title: 'Analyze Performance',
-      description: 'Get detailed insights, statistics, and performance analytics of your followed coders.',
+      title: 'Compare & Track',
+      description: 'View detailed skill comparisons across topics and track your progress over time.',
       step: '03',
     },
     {
       icon: TrendingUp,
-      title: 'Learn & Improve',
-      description: 'Study their solutions, techniques, and strategies to enhance your own coding skills.',
+      title: 'Level Up',
+      description: 'Follow AI-guided coaching to bridge the gap between your skills and your idol\'s mastery.',
       step: '04',
     },
   ];
 
   return (
-    <section className="relative py-20 overflow-hidden">
+    <section id="how-it-works" className="relative py-20 overflow-hidden">
       <div className="absolute inset-0 hero-pattern"></div>
       
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -11,32 +11,28 @@ export const FAQSection = () => {
   const faqs = [
     {
       question: 'What is Idolcode?',
-      answer: 'Idolcode is a platform that allows you to track and follow top competitive programmers from Codeforces. You can monitor their performance, analyze their strategies, and learn from their solutions to improve your own coding skills.',
+      answer: 'Idolcode is a platform that lets you follow any Codeforces coder as your "idol," compare your problem-solving skills against theirs, and get personalized problem recommendations to help you bridge the gap.',
     },
     {
-      question: 'How does the following system work?',
-      answer: 'Simply search for any Codeforces user by their username, and click follow. You\'ll receive real-time updates about their contest participation, rating changes, and achievements. You can manage all your followed coders from your personalized dashboard.',
+      question: 'How do I get started?',
+      answer: 'Simply create an account with your Codeforces username, search for any Codeforces user by their handle, and set them as your idol. You\'ll immediately get skill comparisons and problem suggestions.',
     },
     {
       question: 'Is Idolcode free to use?',
-      answer: 'Yes! We offer a free plan that allows you to follow up to 10 coders and access basic features. For unlimited follows and advanced analytics, you can upgrade to our Pro or Team plans.',
+      answer: 'Yes! Idolcode is completely free to use. All features including skill comparisons, problem recommendations, and AI coaching are available at no cost.',
     },
     {
-      question: 'Can I access historical data and contest results?',
-      answer: 'Absolutely! Pro and Team plan users get access to comprehensive historical data, including past contest performances, rating graphs, problem-solving statistics, and solution archives.',
+      question: 'What data does Idolcode use?',
+      answer: 'Idolcode uses publicly available data from the Codeforces API, including user submissions, ratings, and contest history. We don\'t access any private information.',
     },
     {
-      question: 'Do you support other competitive programming platforms?',
-      answer: 'Currently, we focus exclusively on Codeforces to provide the best possible experience. However, we\'re working on adding support for other platforms like LeetCode, AtCoder, and CodeChef in future updates.',
-    },
-    {
-      question: 'How often is the data updated?',
-      answer: 'Our system syncs with Codeforces in real-time. Contest results and rating updates are reflected within minutes of being published on Codeforces. You\'ll always have access to the most current information.',
+      question: 'How are problems recommended?',
+      answer: 'Our engine compares your solved problems with your idol\'s across different topics (DP, graphs, greedy, etc.), identifies your weakest areas, and suggests problems at the right difficulty to help you improve.',
     },
   ];
 
   return (
-    <section className="relative py-20 overflow-hidden">
+    <section id="faq" className="relative py-20 overflow-hidden">
       <div className="absolute inset-0 grid-pattern opacity-20"></div>
       
       <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -77,18 +73,7 @@ export const FAQSection = () => {
           </Accordion>
         </div>
 
-        {/* Contact CTA */}
-        <div className="text-center mt-12">
-          <p className="text-muted-foreground mb-4">
-            Still have questions? We're here to help!
-          </p>
-          <a
-            href="mailto:support@idolcode.com"
-            className="text-primary hover:text-primary/80 transition-colors font-medium"
-          >
-            Contact Support →
-          </a>
-        </div>
+        {/* Contact CTA removed */}
       </div>
     </section>
   );

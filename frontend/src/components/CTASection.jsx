@@ -1,12 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
 import { ArrowRight, Sparkles } from 'lucide-react';
-import { toast } from 'sonner';
 
 export const CTASection = () => {
-  const handleGetStarted = () => {
-    toast.success('Redirecting to sign up...');
-  };
+  const navigate = useNavigate();
 
   return (
     <section className="relative py-20 overflow-hidden">
@@ -38,26 +36,18 @@ export const CTASection = () => {
             
             {/* Description */}
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Join thousands of programmers who are already tracking, learning, and improving with Idolcode.
-              Start following your coding idols today!
+              Follow any Codeforces coder, compare your skills, and get AI-powered problem recommendations to level up.
             </p>
             
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            {/* CTA Button */}
+            <div className="flex items-center justify-center">
               <Button
                 size="lg"
-                onClick={handleGetStarted}
+                onClick={() => navigate('/login')}
                 className="bg-gradient-to-r from-primary to-accent hover:shadow-[0_0_40px_rgba(6,182,212,0.6)] hover:scale-105 transition-all text-base sm:text-lg px-8 py-6 group"
               >
                 Get Started for Free
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="border-primary/50 hover:bg-primary/10 hover:border-primary transition-all text-base sm:text-lg px-8 py-6"
-              >
-                View Demo
               </Button>
             </div>
             
@@ -65,15 +55,15 @@ export const CTASection = () => {
             <div className="flex flex-wrap items-center justify-center gap-8 pt-8 text-sm text-muted-foreground">
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse"></div>
-                <span>No credit card required</span>
+                <span>Completely free</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse delay-100"></div>
-                <span>Free forever plan</span>
+                <span>No sign-up required to explore</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-2 h-2 bg-primary rounded-full animate-pulse delay-200"></div>
-                <span>Cancel anytime</span>
+                <span>Powered by Gemini AI</span>
               </div>
             </div>
           </div>

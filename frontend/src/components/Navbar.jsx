@@ -20,8 +20,8 @@ export const Navbar = () => {
 
   const navLinks = [
     { name: 'Home', href: '#home' },
-    { name: 'Products', href: '#features' },
-    { name: 'Pricing', href: '#pricing' },
+    { name: 'Features', href: '#features' },
+    { name: 'FAQ', href: '#faq' },
   ];
 
   const handleLogout = () => {
@@ -41,8 +41,8 @@ export const Navbar = () => {
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => navigate('/')}>
             <div className="relative">
               <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full"></div>
-              <div className="relative w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center font-bold text-xl">
-                <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">I</span>
+              <div className="relative w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center font-bold text-lg font-mono">
+                <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">&lt;i&gt;</span>
               </div>
             </div>
             <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-cyan-400 via-cyan-300 to-purple-400 bg-clip-text text-transparent">

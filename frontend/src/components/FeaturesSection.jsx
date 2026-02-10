@@ -1,38 +1,28 @@
 import React from 'react';
 import { Card } from './ui/card';
-import { Bell, BarChart3, Users, Zap, Shield, Code2 } from 'lucide-react';
+import { BarChart3, Users, Zap, Target } from 'lucide-react';
 
 export const FeaturesSection = () => {
   const features = [
     {
       icon: Users,
-      title: 'Follow Top Coders',
-      description: 'Track ranked programmers from Codeforces and stay updated with their performance and achievements.',
+      title: 'Follow Your Idol',
+      description: 'Search any Codeforces user by username and set them as your coding idol to learn from their journey.',
     },
     {
-      icon: Bell,
-      title: 'Real-time Notifications',
-      description: 'Get instant alerts when your followed coders participate in contests or achieve new ranks.',
+      icon: Target,
+      title: 'Smart Recommendations',
+      description: 'Get curated problem suggestions based on the skill gaps between you and your idol.',
     },
     {
       icon: BarChart3,
-      title: 'Performance Analytics',
-      description: 'Deep dive into detailed statistics, rating graphs, and problem-solving patterns.',
+      title: 'Skill Comparison',
+      description: 'Visual side-by-side comparison of your problem-solving stats across topics like DP, graphs, greedy, and more.',
     },
     {
       icon: Zap,
-      title: 'Contest Insights',
-      description: 'Access comprehensive contest data, solutions, and performance comparisons.',
-    },
-    {
-      icon: Code2,
-      title: 'Solution Library',
-      description: 'Browse through curated solutions from top-rated competitive programmers.',
-    },
-    {
-      icon: Shield,
-      title: 'Secure & Private',
-      description: 'Your data is encrypted and protected with enterprise-grade security measures.',
+      title: 'AI-Powered Coaching',
+      description: 'Receive personalized guidance and insights powered by Gemini AI to help you improve faster.',
     },
   ];
 
@@ -50,16 +40,16 @@ export const FeaturesSection = () => {
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold">
             Everything You Need to
             <span className="block mt-2 bg-gradient-to-r from-cyan-400 via-cyan-300 to-purple-400 bg-clip-text text-transparent">
-              Excel in Competitive Programming
+              Learn from the Best Coders
             </span>
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Our platform provides comprehensive tools to help you track, learn, and improve your coding skills.
+            Follow any Codeforces coder, compare your skills, and get AI-powered recommendations to close the gap.
           </p>
         </div>
 
         {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
+        <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (

@@ -5,20 +5,30 @@ import { Input } from '../components/ui/input';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { User, Loader2, ArrowRight, Code2 } from 'lucide-react';
+import { User, Lock, Loader2, ArrowRight, Code2, UserPlus } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 export const Login = () => {
   const [handle, setHandle] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [validationError, setValidationError] = useState('');
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const validateHandle = async () => {
+  const handleAuth = async () => {
     if (!handle.trim()) {
       setValidationError('Please enter your Codeforces handle');
+      return;
+    }
+    if (!password) {
+      setValidationError('Please enter a password');
+      return;
+    }
+    if (isRegisterMode && password.length < 4) {
+      setValidationError('Password must be at least 4 characters');
       return;
     }
 
@@ -26,20 +36,25 @@ export const Login = () => {
     setValidationError('');
 
     try {
-      const response = await axios.get(`${BACKEND_URL}/api/user/${handle}/info`);
+      const endpoint = isRegisterMode ? '/api/auth/register' : '/api/auth/login';
+      const response = await axios.post(`${BACKEND_URL}${endpoint}`, {
+        handle: handle.trim(),
+        password,
+      });
 
-      if (response.data) {
-        login(handle, response.data);
-        toast.success(`Welcome, ${response.data.handle}!`);
+      if (response.data?.success) {
+        login(response.data.handle, response.data);
+        toast.success(
+          isRegisterMode
+            ? `Welcome to Idolcode, ${response.data.handle}!`
+            : `Welcome back, ${response.data.handle}!`
+        );
         navigate('/');
       }
     } catch (error) {
-      if (error.response?.status === 404) {
-        setValidationError('Codeforces user not found. Please check your handle.');
-      } else {
-        setValidationError('Error validating handle. Please try again.');
-      }
-      toast.error('Login failed');
+      const detail = error.response?.data?.detail || 'An error occurred. Please try again.';
+      setValidationError(detail);
+      toast.error(isRegisterMode ? 'Registration failed' : 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -47,7 +62,7 @@ export const Login = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    validateHandle();
+    handleAuth();
   };
 
   return (
@@ -64,8 +79,8 @@ export const Login = () => {
             <div className="inline-flex items-center space-x-3 mb-4">
               <div className="relative">
                 <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full"></div>
-                <div className="relative w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center">
-                  <Code2 className="w-6 h-6 text-white" />
+                <div className="relative w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-xl flex items-center justify-center font-bold text-lg font-mono">
+                  <span className="text-white">&lt;i&gt;</span>
                 </div>
               </div>
               <span className="text-2xl font-bold bg-gradient-to-r from-cyan-400 via-cyan-300 to-purple-400 bg-clip-text text-transparent">
@@ -73,15 +88,18 @@ export const Login = () => {
               </span>
             </div>
             <h1 className="text-3xl font-bold text-foreground mb-2">
-              Sign In
+              {isRegisterMode ? 'Create Account' : 'Sign In'}
             </h1>
             <p className="text-muted-foreground">
-              Enter your Codeforces handle to continue
+              {isRegisterMode
+                ? 'Register with your Codeforces handle'
+                : 'Enter your credentials to continue'}
             </p>
           </div>
 
-          {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Auth Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Handle Field */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
                 Codeforces Handle
@@ -100,11 +118,35 @@ export const Login = () => {
                   disabled={isLoading}
                 />
               </div>
-              {validationError && (
-                <p className="text-sm text-red-500">{validationError}</p>
-              )}
             </div>
 
+            {/* Password Field */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="password"
+                  placeholder={isRegisterMode ? 'Create a password (min. 4 chars)' : 'Enter your password'}
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    setValidationError('');
+                  }}
+                  className="pl-10 h-12 bg-background/50 border-border focus:border-primary"
+                  disabled={isLoading}
+                />
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {validationError && (
+              <p className="text-sm text-red-500">{validationError}</p>
+            )}
+
+            {/* Submit Button */}
             <Button
               type="submit"
               disabled={isLoading}
@@ -113,21 +155,40 @@ export const Login = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Validating...
+                  {isRegisterMode ? 'Registering...' : 'Signing in...'}
                 </>
               ) : (
                 <>
-                  Continue
-                  <ArrowRight className="w-5 h-5 ml-2" />
+                  {isRegisterMode ? (
+                    <>
+                      <UserPlus className="w-5 h-5 mr-2" />
+                      Register
+                    </>
+                  ) : (
+                    <>
+                      Continue
+                      <ArrowRight className="w-5 h-5 ml-2" />
+                    </>
+                  )}
                 </>
               )}
             </Button>
           </form>
 
-          {/* Info */}
+          {/* Toggle Register / Login */}
           <div className="mt-6 text-center">
             <p className="text-sm text-muted-foreground">
-              We'll verify your handle with Codeforces
+              {isRegisterMode ? 'Already have an account?' : "Don't have an account?"}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegisterMode(!isRegisterMode);
+                  setValidationError('');
+                }}
+                className="ml-1 text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                {isRegisterMode ? 'Sign In' : 'Register'}
+              </button>
             </p>
           </div>
         </div>

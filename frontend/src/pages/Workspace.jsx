@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Editor from '@monaco-editor/react';
+import LatexRenderer from '../components/LatexRenderer';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import axios from 'axios';
 import {
   ChevronLeft,
   ChevronRight,
-  Play,
   FlaskConical,
   Moon,
   Timer,
@@ -25,7 +25,9 @@ import {
   Lock,
   Sparkles,
   Swords,
-  ChevronDown
+  ChevronDown,
+  Pause,
+  Play
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -106,11 +108,10 @@ public class Main {
 `,
 };
 
-// Mode configurations
+// Mode configurations — only Coach (blue) and Rival (red)
 const MODES = {
-  white: { name: 'Default', color: 'bg-white', textColor: 'text-gray-800', description: 'Normal coding mode' },
   blue: { name: 'Coach', color: 'bg-blue-500', textColor: 'text-white', description: 'Get hints and guidance' },
-  red: { name: 'Battle', color: 'bg-red-500', textColor: 'text-white', description: 'Competitive mode with timer' },
+  red: { name: 'Rival', color: 'bg-red-500', textColor: 'text-white', description: 'Competitive mode with timer' },
 };
 
 // Timer presets
@@ -124,8 +125,8 @@ const TIMER_PRESETS = [
 
 // Duck SVG Component
 const DuckMascot = ({ mode, isAnimated }) => {
-  const duckColor = mode === 'white' ? '#f0f0f0' : mode === 'blue' ? '#3b82f6' : '#ef4444';
-  const glowColor = mode === 'white' ? 'rgba(240,240,240,0.3)' : mode === 'blue' ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.5)';
+  const duckColor = mode === 'blue' ? '#3b82f6' : '#ef4444';
+  const glowColor = mode === 'blue' ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.5)';
 
   return (
     <div
@@ -170,7 +171,7 @@ const DuckMascot = ({ mode, isAnimated }) => {
 export const Workspace = () => {
   const { contestId, problemIndex } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { user, idol, isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   // Problem state
   const [problem, setProblem] = useState(null);
@@ -179,7 +180,7 @@ export const Workspace = () => {
   // UI state
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [zenMode, setZenMode] = useState(false);
-  const [currentMode, setCurrentMode] = useState('white'); // white, blue, red
+  const [currentMode, setCurrentMode] = useState('blue'); // blue, red
   const [leftPanelWidth, setLeftPanelWidth] = useState(320); // 320px = w-80
   const [rightPanelWidth, setRightPanelWidth] = useState(384); // 384px = w-96
   const [isResizingLeft, setIsResizingLeft] = useState(false);
@@ -192,11 +193,28 @@ export const Workspace = () => {
   const [showTimerDropdown, setShowTimerDropdown] = useState(false);
   const timerRef = useRef(null);
 
-  // Editor state
-  const [files, setFiles] = useState([
-    { id: '1', name: 'solution', language: 'python', content: DEFAULT_CODE.python }
-  ]);
-  const [activeFileId, setActiveFileId] = useState('1');
+  // Editor state — restore from localStorage if available
+  const storageKey = `workspace_code_${contestId}_${problemIndex}`;
+  const [files, setFiles] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.files && parsed.files.length > 0) return parsed.files;
+      }
+    } catch (e) { /* ignore */ }
+    return [{ id: '1', name: 'solution', language: 'python', content: DEFAULT_CODE.python }];
+  });
+  const [activeFileId, setActiveFileId] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.activeFileId) return parsed.activeFileId;
+      }
+    } catch (e) { /* ignore */ }
+    return '1';
+  });
   const editorRef = useRef(null);
 
   // Terminal state
@@ -210,6 +228,7 @@ export const Workspace = () => {
     { role: 'assistant', content: "Hey there! 🦆 I'm your coding duck. How can I help you solve this problem?" }
   ]);
   const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
   const chatScrollRef = useRef(null);
 
   // Submit dialog state
@@ -309,12 +328,12 @@ export const Workspace = () => {
   const handleModeChange = (mode) => {
     setCurrentMode(mode);
     if (mode === 'red') {
-      // Prompt to set timer
-      setShowTimerDropdown(true);
-    } else {
-      setTimerActive(false);
-      if (timerRef.current) clearInterval(timerRef.current);
+      // Show timer dropdown to pick time (don't auto-start)
+      if (!timerActive) {
+        setShowTimerDropdown(true);
+      }
     }
+    // Don't stop timer when switching modes — timer persists
   };
 
   // Start timer
@@ -323,7 +342,27 @@ export const Workspace = () => {
     setTimerSeconds(0);
     setTimerActive(true);
     setShowTimerDropdown(false);
-    toast.success(`Battle mode activated! ${minutes} minutes on the clock.`);
+    toast.success(`Rival mode activated! ${minutes} minutes on the clock.`);
+  };
+
+  // Pause/resume timer
+  const toggleTimer = () => {
+    if (timerActive) {
+      setTimerActive(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+      toast.info('Timer paused');
+    } else if (timerMinutes > 0 || timerSeconds > 0) {
+      setTimerActive(true);
+      toast.info('Timer resumed');
+    }
+  };
+
+  // Stop / reset timer
+  const stopTimer = () => {
+    setTimerActive(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+    setTimerMinutes(30);
+    setTimerSeconds(0);
   };
 
   // Handle editor mount
@@ -346,11 +385,24 @@ export const Workspace = () => {
     monaco.editor.setTheme('idolcode-dark');
   };
 
-  // Handle code change
+  // Handle code change — auto-save to localStorage
+  const saveTimeoutRef = useRef(null);
   const handleCodeChange = (value) => {
-    setFiles(files.map(f =>
+    const updatedFiles = files.map(f =>
       f.id === activeFileId ? { ...f, content: value } : f
-    ));
+    );
+    setFiles(updatedFiles);
+
+    // Debounced auto-save (1 second)
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify({
+          files: updatedFiles,
+          activeFileId,
+        }));
+      } catch (e) { /* quota exceeded, ignore */ }
+    }, 1000);
   };
 
   // Add new file
@@ -388,110 +440,111 @@ export const Workspace = () => {
     }
   };
 
-  // Mock run code
-  const runCode = () => {
-    setIsRunning(true);
-    setTerminalOutput([{ type: 'info', message: '▶ Running code...' }]);
-
-    setTimeout(() => {
-      setTerminalOutput(prev => [
-        ...prev,
-        { type: 'success', message: '✓ Code compiled successfully' },
-        { type: 'output', message: 'Output:\n(No output - code executed without test cases)' }
-      ]);
-      setIsRunning(false);
-    }, 1500);
-  };
-
-  // Mock test code
-  const testCode = () => {
+  // Test code against sample test cases via backend
+  const testCode = async () => {
     if (!problem?.examples?.length) {
-      toast.error('No test cases available');
+      toast.error('No test cases available for this problem');
       return;
     }
 
     setIsRunning(true);
-    setTerminalOutput([{ type: 'info', message: '▶ Running tests...' }]);
+    setTerminalOutput([{ type: 'info', message: '▶ Running tests against sample cases...' }]);
 
-    // Simulate test execution
-    let delay = 500;
-    problem.examples.forEach((example, index) => {
-      setTimeout(() => {
-        const passed = Math.random() > 0.3; // Random pass/fail for mock
-        setTerminalOutput(prev => [
-          ...prev,
-          {
-            type: passed ? 'success' : 'error',
-            message: `Test ${index + 1}: ${passed ? '✓ PASSED' : '✗ WRONG ANSWER'}\n  Input: ${example.input.substring(0, 50)}...\n  Expected: ${example.output.substring(0, 30)}...${passed ? '' : '\n  Got: (different output)'}`
-          }
-        ]);
-      }, delay);
-      delay += 800;
-    });
+    try {
+      const response = await axios.post(`${BACKEND_URL}/api/test-code`, {
+        code: activeFile.content,
+        language: activeFile.language,
+        testCases: problem.examples.map(ex => ({
+          input: ex.input,
+          output: ex.output,
+        })),
+      });
 
-    setTimeout(() => {
-      const allPassed = Math.random() > 0.5;
-      setTerminalOutput(prev => [
-        ...prev,
-        {
-          type: allPassed ? 'success' : 'error',
-          message: allPassed
-            ? '═══════════════════════════════\n  ALL TESTS PASSED! ✓\n═══════════════════════════════'
-            : '═══════════════════════════════\n  SOME TESTS FAILED ✗\n═══════════════════════════════'
-        }
+      const { results, allPassed } = response.data;
+
+      const output = results.map(r => ({
+        type: r.passed ? 'success' : 'error',
+        message: `Test ${r.testCase}: ${r.passed ? '✓ PASSED' : '✗ WRONG ANSWER'}\n  Input: ${r.input.substring(0, 80)}\n  Expected: ${r.expected.substring(0, 80)}\n  Got: ${r.actual.substring(0, 80)}`,
+      }));
+
+      output.push({
+        type: allPassed ? 'success' : 'error',
+        message: allPassed
+          ? '═══════════════════════════════\n  ALL TESTS PASSED! ✓\n═══════════════════════════════'
+          : '═══════════════════════════════\n  SOME TESTS FAILED ✗\n═══════════════════════════════',
+      });
+
+      setTerminalOutput([{ type: 'info', message: '▶ Running tests against sample cases...' }, ...output]);
+
+      if (allPassed) toast.success('All sample tests passed! 🎉');
+      else toast.error('Some tests failed');
+    } catch (error) {
+      const detail = error.response?.data?.detail || error.message;
+      setTerminalOutput([
+        { type: 'info', message: '▶ Running tests against sample cases...' },
+        { type: 'error', message: `Error: ${detail}` },
       ]);
+      toast.error('Test execution failed');
+    } finally {
       setIsRunning(false);
-    }, delay + 500);
+    }
   };
 
-  // Handle chat submit
-  const handleChatSubmit = (e) => {
+  // Handle chat submit — real Gemini-powered Duck Chat
+  const handleChatSubmit = async (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
 
     if (currentMode === 'red') {
-      toast.error('Chat is locked in Battle mode!');
+      toast.error('Chat is locked in Rival mode!');
       return;
     }
 
     const userMessage = chatInput.trim();
     setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setChatInput('');
+    setIsChatLoading(true);
 
-    // Mock AI response
-    setTimeout(() => {
-      const responses = currentMode === 'blue'
-        ? [
-          "Great question! 🦆 Let me help you think through this...",
-          "Have you considered using a greedy approach here?",
-          "Try thinking about the edge cases first!",
-          "What's the time complexity you're aiming for?",
-        ]
-        : [
-          "Quack! 🦆 That's an interesting approach!",
-          "Keep going, you're on the right track!",
-          "Have you tried debugging with smaller inputs?",
-        ];
+    try {
+      const response = await axios.post(`${BACKEND_URL}/api/duck-chat`, {
+        message: userMessage,
+        problemTitle: problem?.title || '',
+        problemStatement: problem?.statement || '',
+        code: activeFile?.content || '',
+        language: activeFile?.language || '',
+        idolHandle: idol?.handle || '',
+        chatHistory: chatMessages.slice(-10),
+      });
 
       setChatMessages(prev => [...prev, {
         role: 'assistant',
-        content: responses[Math.floor(Math.random() * responses.length)]
+        content: response.data.reply,
       }]);
-    }, 1000);
+    } catch (error) {
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Quack! 🦆 Something went wrong. Please try again.',
+      }]);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
-  // Handle submit
+  // Handle submit — open Codeforces submission page
   const handleSubmit = () => {
+    // Save code to localStorage before showing dialog
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ files, activeFileId }));
+    } catch (e) { /* ignore */ }
     setShowSubmitDialog(true);
   };
 
-  const confirmSubmit = (alsoToCodeforces) => {
+  const confirmSubmit = () => {
     setShowSubmitDialog(false);
-    toast.success('Solution submitted!');
-
-    if (alsoToCodeforces && problem?.url) {
-      window.open(problem.url, '_blank');
-    }
+    // Open Codeforces submission page in new tab
+    const cfSubmitUrl = `https://codeforces.com/contest/${contestId}/submit/${problemIndex}`;
+    window.open(cfSubmitUrl, '_blank');
+    toast.success('Opening Codeforces submission page — paste your solution there!');
   };
 
   // Loading state
@@ -530,23 +583,36 @@ export const Workspace = () => {
               <span className={`font-mono text-sm ${timerActive ? 'text-red-400' : 'text-muted-foreground'}`}>
                 {String(timerMinutes).padStart(2, '0')}:{String(timerSeconds).padStart(2, '0')}
               </span>
-              {!timerActive && (
-                <DropdownMenu open={showTimerDropdown} onOpenChange={setShowTimerDropdown}>
-                  <DropdownMenuTrigger asChild>
-                    <button className="p-1 hover:bg-muted rounded">
-                      <ChevronDown className="w-3 h-3" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {TIMER_PRESETS.map((preset) => (
-                      <DropdownMenuItem key={preset.minutes} onClick={() => startTimer(preset.minutes)}>
-                        <Clock className="w-4 h-4 mr-2" />
-                        {preset.label}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+
+              {/* Pause / Resume toggle */}
+              {(timerActive || (timerMinutes > 0 || timerSeconds > 0)) && (timerMinutes !== 30 || timerSeconds !== 0 || timerActive) && (
+                <button onClick={toggleTimer} className="p-1 hover:bg-muted rounded" title={timerActive ? 'Pause' : 'Resume'}>
+                  {timerActive ? <Pause className="w-3 h-3 text-red-400" /> : <Play className="w-3 h-3 text-muted-foreground" />}
+                </button>
               )}
+
+              {/* Timer preset dropdown (when not active) */}
+              <DropdownMenu open={showTimerDropdown} onOpenChange={setShowTimerDropdown}>
+                <DropdownMenuTrigger asChild>
+                  <button className="p-1 hover:bg-muted rounded">
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {TIMER_PRESETS.map((preset) => (
+                    <DropdownMenuItem key={preset.minutes} onClick={() => startTimer(preset.minutes)}>
+                      <Clock className="w-4 h-4 mr-2" />
+                      {preset.label}
+                    </DropdownMenuItem>
+                  ))}
+                  {timerActive && (
+                    <DropdownMenuItem onClick={stopTimer} className="text-red-400">
+                      <X className="w-4 h-4 mr-2" />
+                      Stop Timer
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
 
@@ -560,17 +626,6 @@ export const Workspace = () => {
             <Moon className="w-4 h-4" />
           </Button>
 
-          {/* Run Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={runCode}
-            disabled={isRunning}
-            className="hover:bg-green-500/10 hover:text-green-400"
-          >
-            <Play className="w-4 h-4 mr-1" />
-            Run
-          </Button>
 
           {/* Test Button */}
           <Button
@@ -649,19 +704,19 @@ export const Workspace = () => {
                     )}
 
                     <div className="prose prose-sm prose-invert max-w-none">
-                      <p className="text-muted-foreground">{problem.problemStatement}</p>
+                      <LatexRenderer text={problem.problemStatement} className="text-muted-foreground" />
 
                       {problem.inputSpecification && (
                         <div className="mt-4">
                           <h4 className="text-sm font-semibold text-foreground">Input</h4>
-                          <p className="text-muted-foreground">{problem.inputSpecification}</p>
+                          <LatexRenderer text={problem.inputSpecification} className="text-muted-foreground" />
                         </div>
                       )}
 
                       {problem.outputSpecification && (
                         <div className="mt-4">
                           <h4 className="text-sm font-semibold text-foreground">Output</h4>
-                          <p className="text-muted-foreground">{problem.outputSpecification}</p>
+                          <LatexRenderer text={problem.outputSpecification} className="text-muted-foreground" />
                         </div>
                       )}
 
@@ -690,7 +745,7 @@ export const Workspace = () => {
                       {problem.note && (
                         <div className="mt-4">
                           <h4 className="text-sm font-semibold text-foreground">Note</h4>
-                          <p className="text-muted-foreground">{problem.note}</p>
+                          <LatexRenderer text={problem.note} className="text-muted-foreground" />
                         </div>
                       )}
                     </div>
@@ -856,18 +911,17 @@ export const Workspace = () => {
             {/* Mode Buttons & Duck */}
             <div className="p-4 border-b border-border">
               {/* Mode Buttons */}
-              <div className="flex justify-center gap-2 mb-4">
+              <div className="flex justify-center gap-3 mb-4">
                 {Object.entries(MODES).map(([key, mode]) => (
                   <button
                     key={key}
                     onClick={() => handleModeChange(key)}
-                    className={`w-10 h-10 rounded-lg transition-all ${mode.color} ${currentMode === key
+                    className={`w-12 h-12 rounded-xl transition-all ${mode.color} ${currentMode === key
                       ? 'ring-2 ring-offset-2 ring-offset-background ring-primary shadow-lg scale-110'
                       : 'opacity-70 hover:opacity-100'
                       }`}
                     title={mode.description}
                   >
-                    {key === 'white' && <span className="text-gray-800">○</span>}
                     {key === 'blue' && <Sparkles className="w-5 h-5 mx-auto text-white" />}
                     {key === 'red' && <Swords className="w-5 h-5 mx-auto text-white" />}
                   </button>
@@ -888,14 +942,16 @@ export const Workspace = () => {
               <div className="h-8 bg-card/50 border-b border-border flex items-center px-3">
                 <MessageCircle className="w-3 h-3 mr-2 text-primary" />
                 <span className="text-xs font-medium text-muted-foreground">
-                  {currentMode === 'red' ? 'Chat Locked' : 'Duck Chat'}
+                  {currentMode === 'red' ? 'Chat Locked (Rival Mode)' : 'Duck Chat'}
                 </span>
+                {isChatLoading && <Loader2 className="w-3 h-3 animate-spin ml-2 text-primary" />}
               </div>
 
               {currentMode === 'red' ? (
-                <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                  <Lock className="w-6 h-6 mr-2" />
-                  <span className="text-sm">Focus mode active</span>
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2">
+                  <Lock className="w-6 h-6" />
+                  <span className="text-sm font-medium">Rival Mode — Focus!</span>
+                  <span className="text-xs text-muted-foreground/70">No hints available</span>
                 </div>
               ) : (
                 <>
@@ -955,17 +1011,17 @@ export const Workspace = () => {
       <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
         <AlertDialogContent className="glass-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle>Submit Solution</AlertDialogTitle>
+            <AlertDialogTitle>Submit to Codeforces</AlertDialogTitle>
             <AlertDialogDescription>
-              Your solution will be saved. Would you also like to submit it to Codeforces?
+              Go to Codeforces submission page? You can paste your solution there to submit.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => confirmSubmit(false)}>
-              No, just save
+            <AlertDialogCancel>
+              Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={() => confirmSubmit(true)}>
-              Yes, submit to Codeforces
+            <AlertDialogAction onClick={confirmSubmit}>
+              OK
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

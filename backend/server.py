@@ -8,11 +8,24 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 import asyncio
 import re
+import hashlib
+import secrets
+from collections import Counter
 from bs4 import BeautifulSoup
+import json
+from google import genai
+from services.recommendation_engine import (
+    build_recommendations,
+    fetch_user_submissions,
+    fetch_user_rating_history,
+    fetch_user_info,
+    analyze_user_profile,
+    analyze_idol_profile
+)
 
 
 ROOT_DIR = Path(__file__).parent
@@ -124,10 +137,848 @@ class ProblemContent(BaseModel):
     tags: List[str] = []
     url: str = ""
 
+class ProblemDetail(BaseModel):
+    contestId: Optional[int] = None
+    index: str
+    name: str
+    rating: Optional[int] = None
+    tags: List[str] = []
+    url: str
+    examples: List[ProblemExample] = []
+    timeLimit: Optional[str] = None
+    memoryLimit: Optional[str] = None
+    problemStatement: Optional[str] = None
+    inputSpecification: Optional[str] = None
+    outputSpecification: Optional[str] = None
+    note: Optional[str] = None
+
+# Smart Curriculum Models
+class FailedSubmission(BaseModel):
+    problemId: str
+    tags: List[str] = []
+
+class SmartCurriculumRequest(BaseModel):
+    userHandle: str
+    idolHandle: str
+    userRating: int = 1200
+    solvedProblems: List[str] = []
+    failedSubmissions: List[FailedSubmission] = []
+
+class ProblemRecommendation(BaseModel):
+    problemId: str
+    contestId: Optional[int] = None
+    index: str
+    name: str
+    rating: Optional[int] = None
+    tags: List[str] = []
+    reason: str
+    url: str
+
+class SmartCurriculumResponse(BaseModel):
+    recommendations: List[ProblemRecommendation] = []
+    cached: bool = False
+    generatedAt: datetime
+    expiresAt: datetime
+
+
+# ── New models for topic-aligned recommendations ──
+
+class TopicRecommendation(BaseModel):
+    problemId: str
+    contestId: Optional[int] = None
+    index: str = ""
+    name: str = ""
+    rating: Optional[int] = None
+    tags: List[str] = []
+    difficulty: str = ""  # Easy / Medium / Hard
+    url: str = ""
+
+class RecommendationResponse(BaseModel):
+    recommendations: List[TopicRecommendation] = []
+    description: str = ""
+    userProfile: Optional[Dict[str, Any]] = None
+    idolProfile: Optional[Dict[str, Any]] = None
+    generatedAt: Optional[str] = None
+    cached: bool = False
+
+class ProblemAttempt(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    userHandle: str
+    idolHandle: str
+    problemId: str
+    contestId: Optional[int] = None
+    index: str = ""
+    name: str = ""
+    rating: Optional[int] = None
+    tags: List[str] = []
+    difficulty: str = ""
+    status: str = "attempted"  # "solved" or "failed"
+    attemptedAt: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ProblemAttemptCreate(BaseModel):
+    userHandle: str
+    idolHandle: str
+    problemId: str
+    contestId: Optional[int] = None
+    index: str = ""
+    name: str = ""
+    rating: Optional[int] = None
+    tags: List[str] = []
+    difficulty: str = ""
+    status: str = "attempted"
+
+
+# Smart Curriculum Helper Functions
+# In-memory cache for curriculum recommendations
+curriculum_cache: Dict[str, Dict[str, Any]] = {}
+
+# Configure Gemini API
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+gemini_client = None
+if GEMINI_API_KEY:
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
+
+
+def create_candidate_pool(idol_submissions: List[Dict], user_rating: int, solved_problems: List[str], failed_tags: List[str]) -> List[Dict]:
+    """
+    Filter idol's submissions to create candidate pool.
+    Rules:
+    - Rating between user_rating and user_rating + 400
+    - Exclude solved problems
+    - Remove duplicates
+    - Prefer problems with tags matching failed submissions
+    - Return top 30 candidates
+    """
+    candidates = []
+    seen_problems = set()
+    
+    for submission in idol_submissions:
+        problem_id = submission.get('problemId', '')
+        rating = submission.get('rating')
+        tags = submission.get('tags', [])
+        
+        # Skip if already seen or solved
+        if problem_id in seen_problems or problem_id in solved_problems:
+            continue
+        
+        # Filter by rating window
+        if rating and user_rating <= rating <= user_rating + 400:
+            # Calculate tag overlap score
+            tag_overlap = len(set(tags) & set(failed_tags))
+            
+            candidates.append({
+                **submission,
+                'tag_overlap_score': tag_overlap
+            })
+            seen_problems.add(problem_id)
+    
+    # Sort by tag overlap (descending) and rating (ascending)
+    candidates.sort(key=lambda x: (-x['tag_overlap_score'], x.get('rating', 9999)))
+    
+    return candidates[:30]
+
+
+def analyze_weakness_profile(failed_submissions: List[FailedSubmission]) -> List[str]:
+    """
+    Analyze failed submissions to identify weakness areas.
+    Returns top 5 most failed tags.
+    """
+    tag_counts = {}
+    
+    for submission in failed_submissions:
+        for tag in submission.tags:
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    
+    # Sort by frequency and return top 5
+    sorted_tags = sorted(tag_counts.items(), key=lambda x: -x[1])
+    return [tag for tag, _ in sorted_tags[:5]]
+
+
+async def call_gemini_for_curriculum(candidate_pool: List[Dict], weakness_tags: List[str], user_rating: int, idol_handle: str) -> List[Dict]:
+    """
+    Call Gemini API to select top 5 problems with reasoning.
+    Returns list of {problemId, reason} dicts.
+    """
+    if not gemini_client:
+        # Fallback: simple algorithm
+        return simple_curriculum_fallback(candidate_pool, weakness_tags)
+    
+    try:
+        # Prepare candidate list for prompt
+        candidate_list = []
+        for i, candidate in enumerate(candidate_pool[:30], 1):
+            candidate_list.append(
+                f"{i}. {candidate.get('problemId')} - {candidate.get('name', 'Unknown')} "
+                f"(Rating: {candidate.get('rating', 'N/A')}, Tags: {', '.join(candidate.get('tags', []))})"
+            )
+        
+        candidates_text = "\n".join(candidate_list)
+        weakness_text = ", ".join(weakness_tags) if weakness_tags else "No specific weaknesses identified"
+        
+        prompt = f"""You are a Competitive Programming Coach analyzing a student's learning path.
+
+CONTEXT:
+- Student's current rating: {user_rating}
+- Student's weak areas: {weakness_text}
+- Following idol: {idol_handle}
+
+CANDIDATE PROBLEMS (from idol's history):
+{candidates_text}
+
+TASK:
+Select the top 5 problems that will best help this student improve.
+Prioritize problems that:
+1. Address the student's weak areas ({weakness_text})
+2. Are slightly challenging (rating +100 to +300 above student's rating)
+3. Have similar patterns to areas where the student struggles
+
+RESPONSE FORMAT (strict JSON):
+[
+  {{
+    "problemId": "1100A",
+    "reason": "This problem focuses on {weakness_tags[0] if weakness_tags else 'fundamental concepts'} which you need to strengthen"
+  }}
+]
+
+Return ONLY a valid JSON array with exactly 5 problems, no other text or markdown."""
+
+        # Call Gemini 2.0 Flash
+        response = gemini_client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt
+        )
+        
+        # Parse JSON response
+        response_text = response.text.strip()
+        
+        # Remove markdown code blocks if present
+        if response_text.startswith('```'):
+            response_text = response_text.split('```')[1]
+            if response_text.startswith('json'):
+                response_text = response_text[4:]
+            response_text = response_text.strip()
+        
+        recommendations = json.loads(response_text)
+        
+        # Validate and limit to 5
+        if isinstance(recommendations, list):
+            return recommendations[:5]
+        else:
+            raise ValueError("Invalid response format")
+            
+    except Exception as e:
+        logger.error(f"Gemini API error: {e}")
+        # Fallback to simple algorithm
+        return simple_curriculum_fallback(candidate_pool, weakness_tags)
+
+
+def simple_curriculum_fallback(candidate_pool: List[Dict], weakness_tags: List[str]) -> List[Dict]:
+    """
+    Fallback algorithm when Gemini is unavailable.
+    Simple tag-based selection.
+    """
+    recommendations = []
+    
+    for candidate in candidate_pool[:5]:
+        problem_id = candidate.get('problemId', '')
+        tags = candidate.get('tags', [])
+        rating = candidate.get('rating', 0)
+        
+        # Generate simple reason
+        matching_tags = set(tags) & set(weakness_tags)
+        if matching_tags:
+            reason = f"Covers {', '.join(list(matching_tags)[:2])} which you need to practice"
+        else:
+            reason = f"Good practice problem at rating {rating}"
+        
+        recommendations.append({
+            'problemId': problem_id,
+            'reason': reason
+        })
+    
+    return recommendations
+
+
+def get_cached_curriculum(cache_key: str) -> Optional[Dict]:
+    """Check if cached curriculum exists and is < 24 hours old."""
+    if cache_key in curriculum_cache:
+        cached_data = curriculum_cache[cache_key]
+        age = datetime.now(timezone.utc) - cached_data['timestamp']
+        
+        if age.total_seconds() < 24 * 3600:  # 24 hours
+            return cached_data
+    
+    return None
+
+
+def cache_curriculum(cache_key: str, recommendations: List[ProblemRecommendation]):
+    """Store curriculum recommendations with timestamp."""
+    curriculum_cache[cache_key] = {
+        'recommendations': recommendations,
+        'timestamp': datetime.now(timezone.utc)
+    }
+
+
 # Add your routes to the router instead of directly to app
 @api_router.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return {"message": "IdolCode API"}
+
+
+# ── Auth Models ───────────────────────────────────────────────────────────
+
+class AuthRegister(BaseModel):
+    handle: str
+    password: str
+
+class AuthLogin(BaseModel):
+    handle: str
+    password: str
+
+
+def hash_password(password: str, salt: str = None) -> dict:
+    """Hash password with SHA-256 + salt."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    hashed = hashlib.sha256((salt + password).encode()).hexdigest()
+    return {"hash": hashed, "salt": salt}
+
+
+def verify_password(password: str, stored_hash: str, salt: str) -> bool:
+    """Verify password against stored hash."""
+    return hashlib.sha256((salt + password).encode()).hexdigest() == stored_hash
+
+
+# ── Auth Endpoints ────────────────────────────────────────────────────────
+
+@api_router.post("/auth/register")
+async def register_user(data: AuthRegister):
+    """
+    Register a new user with Codeforces handle + password.
+    Validates handle against Codeforces API first.
+    """
+    handle = data.handle.strip()
+    password = data.password
+
+    if not handle:
+        raise HTTPException(status_code=400, detail="Handle is required")
+    if len(password) < 4:
+        raise HTTPException(status_code=400, detail="Password must be at least 4 characters")
+
+    # Check if user already exists
+    existing = await db.users.find_one({"handle": handle.lower()})
+    if existing:
+        raise HTTPException(status_code=409, detail="User already registered. Please login instead.")
+
+    # Validate handle against Codeforces
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http_client:
+            response = await http_client.get(
+                f"https://codeforces.com/api/user.info?handles={handle}"
+            )
+            if response.status_code != 200:
+                raise HTTPException(status_code=404, detail="Codeforces handle not found")
+            data_resp = response.json()
+            if data_resp.get("status") != "OK":
+                raise HTTPException(status_code=404, detail="Codeforces handle not found")
+            cf_user = data_resp["result"][0]
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Error validating Codeforces handle")
+
+    # Hash password and store
+    pw_data = hash_password(password)
+    user_doc = {
+        "handle": handle.lower(),
+        "displayHandle": cf_user.get("handle", handle),
+        "passwordHash": pw_data["hash"],
+        "salt": pw_data["salt"],
+        "rating": cf_user.get("rating"),
+        "maxRating": cf_user.get("maxRating"),
+        "avatar": cf_user.get("avatar"),
+        "registeredAt": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.insert_one(user_doc)
+
+    return {
+        "success": True,
+        "handle": cf_user.get("handle", handle),
+        "rating": cf_user.get("rating"),
+        "maxRating": cf_user.get("maxRating"),
+        "avatar": cf_user.get("avatar"),
+    }
+
+
+@api_router.post("/auth/login")
+async def login_user(data: AuthLogin):
+    """
+    Login with Codeforces handle + password.
+    Verifies against stored credentials.
+    """
+    handle = data.handle.strip().lower()
+    password = data.password
+
+    if not handle or not password:
+        raise HTTPException(status_code=400, detail="Handle and password are required")
+
+    # Find user in DB
+    user = await db.users.find_one({"handle": handle})
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found. Please register first.")
+
+    # Verify password
+    if not verify_password(password, user["passwordHash"], user["salt"]):
+        raise HTTPException(status_code=401, detail="Invalid password")
+
+    # Fetch latest CF info
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http_client:
+            response = await http_client.get(
+                f"https://codeforces.com/api/user.info?handles={handle}"
+            )
+            if response.status_code == 200:
+                data_resp = response.json()
+                if data_resp.get("status") == "OK":
+                    cf_user = data_resp["result"][0]
+                    return {
+                        "success": True,
+                        "handle": cf_user.get("handle", handle),
+                        "rating": cf_user.get("rating"),
+                        "maxRating": cf_user.get("maxRating"),
+                        "avatar": cf_user.get("avatar"),
+                    }
+    except Exception:
+        pass
+
+    # Fallback: return stored info
+    return {
+        "success": True,
+        "handle": user.get("displayHandle", handle),
+        "rating": user.get("rating"),
+        "maxRating": user.get("maxRating"),
+        "avatar": user.get("avatar"),
+    }
+
+
+# ── Code Testing Endpoint ─────────────────────────────────────────────────
+
+class TestCodeRequest(BaseModel):
+    code: str
+    language: str  # python, javascript, cpp, java
+    testCases: List[Dict[str, str]]  # [{input: "...", output: "..."}]
+
+import subprocess
+import tempfile
+
+@api_router.post("/test-code")
+async def test_code(data: TestCodeRequest):
+    """
+    Run user code against provided test cases using subprocess.
+    Returns per-test results with pass/fail status.
+    """
+    code = data.code
+    language = data.language
+    test_cases = data.testCases
+
+    if not code.strip():
+        raise HTTPException(status_code=400, detail="No code provided")
+    if not test_cases:
+        raise HTTPException(status_code=400, detail="No test cases provided")
+
+    results = []
+
+    for i, tc in enumerate(test_cases):
+        test_input = tc.get("input", "").strip()
+        expected_output = tc.get("output", "").strip()
+
+        try:
+            actual_output = await _run_code(code, language, test_input, timeout=10)
+            actual_output = actual_output.strip()
+
+            # Compare outputs (normalize whitespace per line)
+            expected_lines = [l.strip() for l in expected_output.splitlines() if l.strip()]
+            actual_lines = [l.strip() for l in actual_output.splitlines() if l.strip()]
+            passed = expected_lines == actual_lines
+
+            results.append({
+                "testCase": i + 1,
+                "passed": passed,
+                "input": test_input,
+                "expected": expected_output,
+                "actual": actual_output,
+            })
+        except TimeoutError:
+            results.append({
+                "testCase": i + 1,
+                "passed": False,
+                "input": test_input,
+                "expected": expected_output,
+                "actual": "⏰ Time Limit Exceeded (10s)",
+            })
+        except Exception as e:
+            results.append({
+                "testCase": i + 1,
+                "passed": False,
+                "input": test_input,
+                "expected": expected_output,
+                "actual": f"Runtime Error: {str(e)}",
+            })
+
+    all_passed = all(r["passed"] for r in results)
+    return {"results": results, "allPassed": all_passed}
+
+
+async def _run_code(code: str, language: str, stdin_input: str, timeout: int = 10) -> str:
+    """Execute code in a subprocess and return stdout."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        if language == "python":
+            filepath = os.path.join(tmpdir, "solution.py")
+            with open(filepath, "w") as f:
+                f.write(code)
+            cmd = ["python3", filepath]
+
+        elif language == "javascript":
+            filepath = os.path.join(tmpdir, "solution.js")
+            with open(filepath, "w") as f:
+                f.write(code)
+            cmd = ["node", filepath]
+
+        elif language == "cpp":
+            src = os.path.join(tmpdir, "solution.cpp")
+            exe = os.path.join(tmpdir, "solution")
+            with open(src, "w") as f:
+                f.write(code)
+            # Compile
+            compile_proc = await asyncio.create_subprocess_exec(
+                "g++", "-O2", "-o", exe, src,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, compile_err = await asyncio.wait_for(compile_proc.communicate(), timeout=15)
+            if compile_proc.returncode != 0:
+                raise Exception(f"Compilation Error:\n{compile_err.decode()}")
+            cmd = [exe]
+
+        elif language == "java":
+            filepath = os.path.join(tmpdir, "Main.java")
+            with open(filepath, "w") as f:
+                f.write(code)
+            # Compile
+            compile_proc = await asyncio.create_subprocess_exec(
+                "javac", filepath,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, compile_err = await asyncio.wait_for(compile_proc.communicate(), timeout=15)
+            if compile_proc.returncode != 0:
+                raise Exception(f"Compilation Error:\n{compile_err.decode()}")
+            cmd = ["java", "-cp", tmpdir, "Main"]
+
+        else:
+            raise Exception(f"Unsupported language: {language}")
+
+        # Run
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=stdin_input.encode()),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            raise TimeoutError("Time Limit Exceeded")
+
+        if proc.returncode != 0:
+            err_msg = stderr.decode().strip()
+            raise Exception(err_msg or "Runtime error (non-zero exit code)")
+
+        return stdout.decode()
+
+
+# ── Duck Chat Endpoint ─────────────────────────────────────────────────────
+
+class DuckChatRequest(BaseModel):
+    message: str
+    problemStatement: Optional[str] = None
+    problemTitle: Optional[str] = None
+    code: Optional[str] = None
+    language: Optional[str] = None
+    idolHandle: Optional[str] = None
+    chatHistory: Optional[List[Dict[str, str]]] = None  # [{role, content}]
+
+
+@api_router.post("/duck-chat")
+async def duck_chat(data: DuckChatRequest):
+    """
+    AI-powered Duck Chat using Gemini.
+    Provides contextual hints based on the problem, code, and idol's style.
+    """
+    if not gemini_client:
+        raise HTTPException(status_code=500, detail="Gemini API not configured")
+
+    # Build system context
+    system_parts = [
+        "You are DuckBot 🦆, a friendly and encouraging competitive programming coach.",
+        "You help users solve Codeforces problems by giving hints, explaining concepts, and guiding their thinking.",
+        "IMPORTANT: Never give the full solution directly. Instead, provide hints, point out issues, suggest approaches, and explain relevant algorithms.",
+        "Keep responses concise (2-4 sentences max) unless the user asks for a detailed explanation.",
+        "Use emoji sparingly to stay friendly. Reference the problem context when relevant.",
+    ]
+
+    if data.idolHandle:
+        system_parts.append(
+            f"The user is learning from competitive programmer '{data.idolHandle}'. "
+            f"When relevant, mention techniques or approaches that top competitive programmers like {data.idolHandle} commonly use."
+        )
+
+    if data.problemTitle and data.problemStatement:
+        system_parts.append(f"\n--- CURRENT PROBLEM ---\nTitle: {data.problemTitle}\n{data.problemStatement[:3000]}")
+
+    if data.code and data.code.strip():
+        system_parts.append(f"\n--- USER'S CURRENT CODE ({data.language or 'unknown'}) ---\n{data.code[:2000]}")
+
+    system_prompt = "\n".join(system_parts)
+
+    # Build conversation
+    contents = []
+    if data.chatHistory:
+        for msg in data.chatHistory[-10:]:  # Keep last 10 messages for context
+            role = "user" if msg.get("role") == "user" else "model"
+            contents.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
+
+    # Add the new user message
+    contents.append({"role": "user", "parts": [{"text": data.message}]})
+
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents,
+            config={
+                "system_instruction": system_prompt,
+                "temperature": 0.7,
+                "max_output_tokens": 500,
+            },
+        )
+
+        reply = response.text.strip() if response.text else "Quack! 🦆 I'm having trouble thinking right now. Try again!"
+        return {"reply": reply}
+
+    except Exception as e:
+        logging.error(f"Gemini duck-chat error: {e}")
+        return {"reply": "Quack! 🦆 Something went wrong. Please try again in a moment."}
+
+
+# ── Skill Comparison Endpoint ──────────────────────────────────────────────
+
+@api_router.get("/skill-comparison/{user_handle}/{idol_handle}")
+async def get_skill_comparison(
+    user_handle: str,
+    idol_handle: str,
+    topics: Optional[str] = Query(None, description="Comma-separated custom topics to focus on"),
+):
+    """
+    Compare user skills with idol's skills *at a similar rank*.
+    Returns:
+    - Topic comparison stats (User vs Idol)
+    - Top 3 weakest topics to improve (or custom-selected topics)
+    - 3 suggested problems per weak topic from Idol's history
+    - Full list of all Codeforces topic tags for customize UI
+    """
+    # 1. Fetch data
+    try:
+        user_info = await fetch_user_info(user_handle)
+        if not user_info:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_rating = user_info.get("rating", 0)
+        # If user has no rating (unrated), assume 800 (newbie base)
+        if not user_rating:
+            user_rating = 800
+
+        user_subs = await fetch_user_submissions(user_handle)
+        idol_subs = await fetch_user_submissions(idol_handle)
+        idol_history = await fetch_user_rating_history(idol_handle)
+
+    except Exception as e:
+        logger.error(f"Error fetching data for comparison: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch verification data")
+
+    # 2. Analyze profiles
+    user_profile = analyze_user_profile(user_subs)
+    idol_profile = analyze_idol_profile(idol_subs, idol_history)
+
+    user_solved_ids = user_profile["solved_problem_ids"]
+    user_tags = user_profile["solved_by_tag"]
+
+    # 3. Use idol's FULL Codeforces history for comparison
+    # This gives complete data and avoids None idolRatingAtSolve issues
+    idol_all_tags = Counter()
+    for p in idol_profile["solved_problems"]:
+        for t in p.get("tags", []):
+            idol_all_tags[t] += 1
+
+    # 4. Build Comparison Stats
+    # Identify relevant topics (top 20 most common in idol's full history)
+    top_idol_tags = [t for t, _ in idol_all_tags.most_common(20)]
+    # Also include user's top tags if not in that list
+    top_user_tags = [t for t, _ in Counter(user_tags).most_common(10)]
+    all_relevant_tags = list(dict.fromkeys(top_idol_tags + top_user_tags))  # preserve order, dedupe
+
+    comparison_stats = []
+    for tag in all_relevant_tags:
+        u_val = user_tags.get(tag, 0)
+        i_val = idol_all_tags.get(tag, 0)
+
+        # We only care if at least one side has meaningful data
+        if i_val < 2 and u_val < 2:
+            continue
+
+        comparison_stats.append({
+            "topic": tag,
+            "user": u_val,
+            "idol": i_val,
+            "gap": i_val - u_val
+        })
+
+    # Sort by Gap descending (biggest weakness first)
+    comparison_stats.sort(key=lambda x: x["gap"], reverse=True)
+
+    # 5. Identify Weakest Topics & Recommendations
+    weakest_topics = []
+    seen_topics = set()  # prevent duplicate topic entries
+    
+    # Filter for positive gaps where idol has much more experience
+    candidate_topics = [s for s in comparison_stats if s["gap"] > 2]
+    
+    # If not enough gaps, just pick top idol topics user hasn't touched much
+    if len(candidate_topics) < 3:
+        candidate_topics = comparison_stats[:5]
+
+    for item in candidate_topics:
+        if len(weakest_topics) >= 3:
+            break
+        topic = item["topic"]
+        if topic in seen_topics:
+            continue
+        seen_topics.add(topic)
+        
+        # Find 3 problems from Idol's history for this topic:
+        # - Not solved by user
+        # - Tagged with this topic
+        # - Rating is challenging but doable (UserRating - 100 to UserRating + 400)
+        # - If idol solved it around that rank, even better.
+        
+        candidates = []
+        for p in idol_profile["solved_problems"]:
+            if p["problemId"] in user_solved_ids:
+                continue
+            if topic not in p.get("tags", []):
+                continue
+            
+            p_rating = p.get("rating")
+            if not p_rating: 
+                continue
+
+            # Difficulty window:
+            if (user_rating - 200) <= p_rating <= (user_rating + 500):
+                candidates.append(p)
+
+        # Sort candidates by rating (easier first) to build confidence
+        candidates.sort(key=lambda x: x["rating"])
+        
+        # Pick top 3 unique problems
+        problems = []
+        seen_pids = set()
+        for p in candidates:
+            if p["problemId"] not in seen_pids:
+                problems.append({
+                    "name": p["name"],
+                    "rating": p["rating"],
+                    "url": f"https://codeforces.com/contest/{p['contestId']}/problem/{p['index']}",
+                    "contestId": p["contestId"],
+                    "index": p["index"]
+                })
+                seen_pids.add(p["problemId"])
+            if len(problems) >= 3:
+                break
+        
+        if problems:
+            weakest_topics.append({
+                "topic": topic,
+                "gap": item["gap"],
+                "problems": problems
+            })
+
+    # 6. If custom topics were requested, override weakest_topics with those specific topics
+    custom_topic_list = [t.strip() for t in topics.split(",")] if topics else []
+    if custom_topic_list:
+        weakest_topics = []
+        for topic_name in custom_topic_list[:3]:
+            # Find gap info from comparison_stats
+            stat_item = next((s for s in comparison_stats if s["topic"] == topic_name), None)
+            gap_val = stat_item["gap"] if stat_item else 0
+
+            candidates = []
+            for p in idol_profile["solved_problems"]:
+                if p["problemId"] in user_solved_ids:
+                    continue
+                if topic_name not in p.get("tags", []):
+                    continue
+                p_rating = p.get("rating")
+                if not p_rating:
+                    continue
+                if (user_rating - 200) <= p_rating <= (user_rating + 500):
+                    candidates.append(p)
+
+            candidates.sort(key=lambda x: x["rating"])
+            problems = []
+            seen_pids = set()
+            for p in candidates:
+                if p["problemId"] not in seen_pids:
+                    problems.append({
+                        "name": p["name"],
+                        "rating": p["rating"],
+                        "url": f"https://codeforces.com/contest/{p['contestId']}/problem/{p['index']}",
+                        "contestId": p["contestId"],
+                        "index": p["index"]
+                    })
+                    seen_pids.add(p["problemId"])
+                if len(problems) >= 3:
+                    break
+
+            if problems:
+                weakest_topics.append({
+                    "topic": topic_name,
+                    "gap": gap_val,
+                    "problems": problems
+                })
+
+    # 7. Build full list of all known Codeforces problem tags for the Customize overlay
+    ALL_CF_TAGS = sorted([
+        "2-sat", "binary search", "bitmasks", "brute force", "chinese remainder theorem",
+        "combinatorics", "constructive algorithms", "data structures", "dfs and similar",
+        "divide and conquer", "dp", "dsu", "expression parsing", "fft", "flows",
+        "games", "geometry", "graph matchings", "graphs", "greedy", "hashing",
+        "implementation", "interactive", "math", "matrices", "meet-in-the-middle",
+        "number theory", "probabilities", "schedules", "shortest paths",
+        "sortings", "string suffix structures", "strings", "ternary search",
+        "trees", "two pointers",
+    ])
+
+    return {
+        "stats": comparison_stats,  # Full list for visualization
+        "weakestTopics": weakest_topics,  # Top 3 with recommendations
+        "userRating": user_rating,
+        "idolRatingAtComparison": user_rating,  # Now comparing against full history
+        "allTopics": ALL_CF_TAGS,  # For customize overlay
+    }
+
 
 @api_router.get("/coders/search", response_model=List[CoderSuggestion])
 async def search_coders(query: str, limit: int = 5):
@@ -449,6 +1300,138 @@ async def get_user_solved_problems(handle: str):
         raise HTTPException(status_code=500, detail="Error fetching user solved problems")
 
 
+@api_router.post("/smart-curriculum", response_model=SmartCurriculumResponse)
+async def generate_smart_curriculum(request: SmartCurriculumRequest):
+    """
+    Generate AI-powered problem recommendations using Gemini API.
+    Returns top 5 problems from idol's history tailored to user's weaknesses.
+    """
+    try:
+        # Create cache key
+        cache_key = f"{request.userHandle}_{request.idolHandle}"
+        
+        # Check cache first
+        cached = get_cached_curriculum(cache_key)
+        if cached:
+            logger.info(f"Returning cached curriculum for {cache_key}")
+            return SmartCurriculumResponse(
+                recommendations=cached['recommendations'],
+                cached=True,
+                generatedAt=cached['timestamp'],
+                expiresAt=cached['timestamp'] + timedelta(hours=24)
+            )
+        
+        # Fetch idol's submission history
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            response = await http_client.get(
+                f"https://codeforces.com/api/user.status?handle={request.idolHandle}&from=1&count=1000"
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"Could not fetch submissions for {request.idolHandle}")
+            
+            data = response.json()
+            if data.get("status") != "OK":
+                raise HTTPException(status_code=404, detail=f"Idol {request.idolHandle} not found")
+            
+            # Extract solved problems from idol's history
+            idol_submissions = []
+            seen_problems = set()
+            
+            for submission in data.get("result", []):
+                if submission.get("verdict") == "OK":
+                    problem = submission.get("problem", {})
+                    contest_id = problem.get("contestId")
+                    index = problem.get("index", "")
+                    
+                    if not contest_id or not index:
+                        continue
+                    
+                    problem_id = f"{contest_id}{index}"
+                    
+                    if problem_id in seen_problems:
+                        continue
+                    
+                    seen_problems.add(problem_id)
+                    
+                    idol_submissions.append({
+                        'problemId': problem_id,
+                        'contestId': contest_id,
+                        'index': index,
+                        'name': problem.get("name", ""),
+                        'rating': problem.get("rating"),
+                        'tags': problem.get("tags", [])
+                    })
+        
+        # Analyze user's weakness profile
+        weakness_tags = analyze_weakness_profile(request.failedSubmissions)
+        
+        # Create candidate pool
+        candidate_pool = create_candidate_pool(
+            idol_submissions,
+            request.userRating,
+            request.solvedProblems,
+            weakness_tags
+        )
+        
+        if not candidate_pool:
+            # No suitable problems found
+            return SmartCurriculumResponse(
+                recommendations=[],
+                cached=False,
+                generatedAt=datetime.now(timezone.utc),
+                expiresAt=datetime.now(timezone.utc) + timedelta(hours=24)
+            )
+        
+        # Call Gemini for smart recommendations
+        gemini_recommendations = await call_gemini_for_curriculum(
+            candidate_pool,
+            weakness_tags,
+            request.userRating,
+            request.idolHandle
+        )
+        
+        # Build full recommendation objects
+        recommendations = []
+        for rec in gemini_recommendations:
+            problem_id = rec.get('problemId', '')
+            
+            # Find the full problem data from candidate pool
+            problem_data = next(
+                (p for p in candidate_pool if p.get('problemId') == problem_id),
+                None
+            )
+            
+            if problem_data:
+                recommendations.append(ProblemRecommendation(
+                    problemId=problem_id,
+                    contestId=problem_data.get('contestId'),
+                    index=problem_data.get('index', ''),
+                    name=problem_data.get('name', ''),
+                    rating=problem_data.get('rating'),
+                    tags=problem_data.get('tags', []),
+                    reason=rec.get('reason', 'Recommended by your coach'),
+                    url=f"https://codeforces.com/problemset/problem/{problem_data.get('contestId')}/{problem_data.get('index')}"
+                ))
+        
+        # Cache the results
+        cache_curriculum(cache_key, recommendations)
+        
+        now = datetime.now(timezone.utc)
+        return SmartCurriculumResponse(
+            recommendations=recommendations,
+            cached=False,
+            generatedAt=now,
+            expiresAt=now + timedelta(hours=24)
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating smart curriculum: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating smart curriculum: {str(e)}")
+
+
 @api_router.get("/compare/{user_handle}/{idol_handle}", response_model=ComparisonData)
 async def compare_users(user_handle: str, idol_handle: str):
     """
@@ -546,6 +1529,52 @@ async def get_problem_content(contest_id: int, problem_index: str):
                     if memory_elem:
                         memory_limit = memory_elem.get_text().replace('memory limit per test', '').strip()
                     
+                    def extract_text_with_latex(element):
+                        """Extract text preserving LaTeX notation from Codeforces HTML.
+                        Converts tex-span, tex-font-style-bf/it, and $$$ delimiters to KaTeX format."""
+                        if element is None:
+                            return ""
+                        
+                        import copy
+                        el = copy.copy(element)
+                        
+                        # Process the HTML string directly for $$$...$$$
+                        html_str = str(el)
+                        # Codeforces uses $$$ as LaTeX delimiters
+                        html_str = html_str.replace('$$$', '$')
+                        
+                        # Re-parse the modified HTML
+                        from bs4 import BeautifulSoup as BS
+                        el = BS(html_str, 'html.parser')
+                        
+                        # Convert <br/> to newlines
+                        for br in el.find_all('br'):
+                            br.replace_with('\n')
+                        
+                        # Convert <p> tags to text with spacing
+                        for p in el.find_all('p'):
+                            p.insert_before('\n')
+                            p.insert_after('\n')
+                        
+                        # Convert <li> to bullet points
+                        for li in el.find_all('li'):
+                            li.insert_before('\n• ')
+                        
+                        # Get text (LaTeX $...$ delimiters are preserved as text)
+                        text = el.get_text()
+                        
+                        # Clean up excessive whitespace but preserve newlines
+                        lines = text.split('\n')
+                        cleaned_lines = []
+                        for line in lines:
+                            cleaned = ' '.join(line.split())
+                            if cleaned:
+                                cleaned_lines.append(cleaned)
+                            elif cleaned_lines and cleaned_lines[-1] != '':
+                                cleaned_lines.append('')
+                        
+                        return '\n'.join(cleaned_lines).strip()
+
                     # Extract problem statement - get text from divs without class
                     statement_div = soup.select_one('.problem-statement')
                     if statement_div:
@@ -553,17 +1582,19 @@ async def get_problem_content(contest_id: int, problem_index: str):
                         for div in statement_div.find_all('div', recursive=False):
                             class_list = div.get('class', [])
                             if not class_list:
-                                problem_statement += div.get_text(separator='\n').strip() + '\n\n'
+                                problem_statement += extract_text_with_latex(div) + '\n\n'
                     
                     # Extract input specification
                     input_div = soup.select_one('.problem-statement .input-specification')
                     if input_div:
-                        input_spec = input_div.get_text(separator='\n').replace('Input', '', 1).strip()
+                        text = extract_text_with_latex(input_div)
+                        input_spec = text.replace('Input', '', 1).strip()
                     
                     # Extract output specification
                     output_div = soup.select_one('.problem-statement .output-specification')
                     if output_div:
-                        output_spec = output_div.get_text(separator='\n').replace('Output', '', 1).strip()
+                        text = extract_text_with_latex(output_div)
+                        output_spec = text.replace('Output', '', 1).strip()
                     
                     # Extract examples
                     sample_tests = soup.select_one('.problem-statement .sample-tests')
@@ -578,7 +1609,7 @@ async def get_problem_content(contest_id: int, problem_index: str):
                     # Extract note
                     note_div = soup.select_one('.problem-statement .note')
                     if note_div:
-                        note = note_div.get_text(separator='\n').replace('Note', '', 1).strip()
+                        note = extract_text_with_latex(note_div).replace('Note', '', 1).strip()
                         
             except Exception as parse_error:
                 logger.warning(f"Could not parse problem page: {parse_error}")
@@ -609,6 +1640,203 @@ async def get_problem_content(contest_id: int, problem_index: str):
 
 
 # Session management endpoints
+
+# ── NEW: Topic-Aligned Recommendation Endpoint ──────────────────────────
+
+@api_router.get("/recommendations/{user_handle}/{idol_handle}", response_model=RecommendationResponse)
+async def get_recommendations(user_handle: str, idol_handle: str, refresh: bool = False):
+    """
+    Get 3 topic-aligned problem recommendations (easy, medium, hard).
+    Analyzes user weaknesses & idol strengths, stores in MongoDB, returns from cache if fresh.
+    """
+    try:
+        # Check MongoDB cache first (unless refresh requested)
+        if not refresh:
+            cached = await db.recommended_problems.find_one(
+                {"userHandle": user_handle, "idolHandle": idol_handle},
+                {"_id": 0}
+            )
+            if cached:
+                generated_at = cached.get("generatedAt", "")
+                if generated_at:
+                    try:
+                        gen_time = datetime.fromisoformat(generated_at)
+                        age_hours = (datetime.now(timezone.utc) - gen_time).total_seconds() / 3600
+                        if age_hours < 24:
+                            return RecommendationResponse(
+                                recommendations=[
+                                    TopicRecommendation(**r) for r in cached.get("recommendations", [])
+                                ],
+                                description=cached.get("description", ""),
+                                userProfile=cached.get("userProfile"),
+                                idolProfile=cached.get("idolProfile"),
+                                generatedAt=generated_at,
+                                cached=True,
+                            )
+                    except Exception:
+                        pass  # stale or invalid, regenerate
+
+        # Build fresh recommendations
+        result = await build_recommendations(
+            user_handle=user_handle,
+            idol_handle=idol_handle,
+            gemini_client=gemini_client,
+            db=db,
+        )
+
+        return RecommendationResponse(
+            recommendations=[
+                TopicRecommendation(**r) for r in result.get("recommendations", [])
+            ],
+            description=result.get("description", ""),
+            userProfile=result.get("userProfile"),
+            idolProfile=result.get("idolProfile"),
+            generatedAt=result.get("generatedAt"),
+            cached=False,
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
+
+
+# ── Check Codeforces Submissions ────────────────────────────────────────
+
+
+@api_router.get("/check-submissions/{user_handle}")
+async def check_codeforces_submissions(user_handle: str, problem_ids: str = ""):
+    """
+    Check if the user has recently solved specific problems on Codeforces.
+    problem_ids: comma-separated list of problem IDs (e.g., "1984C2,2183D1,2077A")
+    Returns dict mapping problemId -> { solved: bool, verdict: str }
+    """
+    try:
+        target_ids = set(pid.strip() for pid in problem_ids.split(",") if pid.strip())
+
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            response = await http_client.get(
+                f"https://codeforces.com/api/user.status?handle={user_handle}&from=1&count=30"
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=404, detail=f"Could not fetch submissions for {user_handle}")
+
+            data = response.json()
+            if data.get("status") != "OK":
+                raise HTTPException(status_code=404, detail=f"User {user_handle} not found")
+
+            results = {}
+            for submission in data.get("result", []):
+                problem = submission.get("problem", {})
+                contest_id = problem.get("contestId")
+                index = problem.get("index", "")
+                if not contest_id or not index:
+                    continue
+
+                problem_id = f"{contest_id}{index}"
+                verdict = submission.get("verdict", "")
+
+                # Only check problems we care about
+                if target_ids and problem_id not in target_ids:
+                    continue
+
+                # Mark as solved if verdict is OK
+                if problem_id not in results or verdict == "OK":
+                    results[problem_id] = {
+                        "solved": verdict == "OK",
+                        "verdict": verdict,
+                    }
+
+        return {"submissions": results}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking submissions: {e}")
+        raise HTTPException(status_code=500, detail="Error checking Codeforces submissions")
+
+
+# ── NEW: Problem History Endpoints ──────────────────────────────────────
+
+@api_router.get("/problem-history/{user_handle}")
+async def get_problem_history(user_handle: str, limit: int = 50):
+    """
+    Get the user's problem attempt history (solved/failed) from this platform.
+    Sorted by most recent first.
+    """
+    try:
+        attempts = await db.problem_history.find(
+            {"userHandle": user_handle},
+            {"_id": 0}
+        ).sort("attemptedAt", -1).limit(limit).to_list(limit)
+        return {"history": attempts}
+    except Exception as e:
+        logger.error(f"Error fetching problem history: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching problem history")
+
+
+@api_router.post("/problem-history")
+async def record_problem_attempt(attempt: ProblemAttemptCreate):
+    """
+    Record or update a problem attempt (solved or failed) in the user's history.
+    Uses upsert on (userHandle, problemId) so only one entry exists per problem.
+    """
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        existing = await db.problem_history.find_one(
+            {"userHandle": attempt.userHandle, "problemId": attempt.problemId},
+            {"_id": 0}
+        )
+
+        if existing:
+            # Update existing record with new status and timestamp
+            await db.problem_history.update_one(
+                {"userHandle": attempt.userHandle, "problemId": attempt.problemId},
+                {"$set": {"status": attempt.status, "attemptedAt": now}}
+            )
+            return {"success": True, "id": existing.get("id", "")}
+        else:
+            doc = ProblemAttempt(
+                userHandle=attempt.userHandle,
+                idolHandle=attempt.idolHandle,
+                problemId=attempt.problemId,
+                contestId=attempt.contestId,
+                index=attempt.index,
+                name=attempt.name,
+                rating=attempt.rating,
+                tags=attempt.tags,
+                difficulty=attempt.difficulty,
+                status=attempt.status,
+            )
+            await db.problem_history.insert_one(doc.model_dump())
+            return {"success": True, "id": doc.id}
+    except Exception as e:
+        logger.error(f"Error recording problem attempt: {e}")
+        raise HTTPException(status_code=500, detail="Error recording problem attempt")
+
+
+@api_router.put("/problem-history/{attempt_id}/status")
+async def update_attempt_status(attempt_id: str, status: str):
+    """
+    Update the status of a problem attempt (e.g., from 'attempted' to 'solved' or 'failed').
+    """
+    if status not in ("solved", "failed", "attempted"):
+        raise HTTPException(status_code=400, detail="Status must be 'solved', 'failed', or 'attempted'")
+    try:
+        result = await db.problem_history.update_one(
+            {"id": attempt_id},
+            {"$set": {"status": status}}
+        )
+        if result.matched_count == 0:
+            raise HTTPException(status_code=404, detail="Attempt not found")
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating attempt status: {e}")
+        raise HTTPException(status_code=500, detail="Error updating attempt status")
+
+
 @api_router.post("/session")
 async def create_session(user_handle: str, idol_handle: str):
     """
