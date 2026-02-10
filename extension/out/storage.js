@@ -6,49 +6,43 @@ exports.clearSession = clearSession;
 exports.updateIdol = updateIdol;
 exports.saveViewState = saveViewState;
 exports.getViewState = getViewState;
-exports.updateCurrentProblem = updateCurrentProblem;
-exports.updateCurrentView = updateCurrentView;
+exports.saveDashboardData = saveDashboardData;
+exports.getDashboardData = getDashboardData;
 const SESSION_KEY = 'idolcode.session';
-const VIEW_STATE_KEY = 'idolcode.viewState';
-function saveSession(context, session) {
-    context.globalState.update(SESSION_KEY, session);
+const VIEW_KEY = 'idolcode.viewState';
+const DASHBOARD_KEY = 'idolcode.dashboardData';
+/* ─── Session ─────────────────────────────────────────────────── */
+async function saveSession(ctx, s) {
+    await ctx.globalState.update(SESSION_KEY, s);
 }
-function getSession(context) {
-    return context.globalState.get(SESSION_KEY);
+function getSession(ctx) {
+    return ctx.globalState.get(SESSION_KEY);
 }
-function clearSession(context) {
-    context.globalState.update(SESSION_KEY, undefined);
-    context.globalState.update(VIEW_STATE_KEY, undefined);
+async function clearSession(ctx) {
+    await ctx.globalState.update(SESSION_KEY, undefined);
+    await ctx.globalState.update(VIEW_KEY, undefined);
+    await ctx.globalState.update(DASHBOARD_KEY, undefined);
 }
-function updateIdol(context, idolHandle, idolInfo) {
-    const session = getSession(context);
-    if (session) {
-        session.idolHandle = idolHandle;
-        session.idolInfo = idolInfo;
-        saveSession(context, session);
+async function updateIdol(ctx, idolHandle, idolInfo) {
+    const s = getSession(ctx);
+    if (s) {
+        s.idolHandle = idolHandle;
+        s.idolInfo = idolInfo;
+        await saveSession(ctx, s);
     }
 }
-function saveViewState(context, viewState) {
-    context.globalState.update(VIEW_STATE_KEY, viewState);
+/* ─── View State ──────────────────────────────────────────────── */
+async function saveViewState(ctx, vs) {
+    await ctx.globalState.update(VIEW_KEY, vs);
 }
-function getViewState(context) {
-    return context.globalState.get(VIEW_STATE_KEY);
+function getViewState(ctx) {
+    return ctx.globalState.get(VIEW_KEY);
 }
-function updateCurrentProblem(context, problem) {
-    const viewState = {
-        currentView: 'problem-solving',
-        currentProblemId: `${problem.contestId}${problem.index}`,
-        currentProblem: problem
-    };
-    saveViewState(context, viewState);
+/* ─── Dashboard Cache ─────────────────────────────────────────── */
+async function saveDashboardData(ctx, data) {
+    await ctx.globalState.update(DASHBOARD_KEY, data);
 }
-function updateCurrentView(context, view) {
-    const existing = getViewState(context);
-    const viewState = {
-        currentView: view,
-        currentProblemId: existing?.currentProblemId,
-        currentProblem: view === 'problem-solving' ? existing?.currentProblem : undefined
-    };
-    saveViewState(context, viewState);
+function getDashboardData(ctx) {
+    return ctx.globalState.get(DASHBOARD_KEY);
 }
 //# sourceMappingURL=storage.js.map

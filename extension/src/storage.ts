@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { UserInfo, UserStats, ProblemContent } from './api';
+import { UserInfo, UserStats, ProblemContent, ComparisonData, RecommendedProblem, SkillComparisonData, HistoryItem } from './api';
 
-export type ViewState = 'wakeup' | 'login' | 'idol-selection' | 'workspace' | 'problem-solving';
+export type ViewState = 'wakeup' | 'login' | 'idol-selection' | 'dashboard' | 'problem';
 
 export interface StoredSession {
     userHandle: string;
@@ -10,60 +10,62 @@ export interface StoredSession {
     idolInfo?: UserStats;
 }
 
-export interface StoredViewState {
+export interface SavedViewState {
     currentView: ViewState;
-    currentProblemId?: string;
     currentProblem?: ProblemContent;
 }
 
+export interface SavedDashboardData {
+    comparison: ComparisonData | null;
+    recommendations: RecommendedProblem[];
+    recDescription: string;
+    skillComparison: SkillComparisonData | null;
+    history: HistoryItem[];
+    solvedProblems: string[];
+}
+
 const SESSION_KEY = 'idolcode.session';
-const VIEW_STATE_KEY = 'idolcode.viewState';
+const VIEW_KEY = 'idolcode.viewState';
+const DASHBOARD_KEY = 'idolcode.dashboardData';
 
-export function saveSession(context: vscode.ExtensionContext, session: StoredSession): void {
-    context.globalState.update(SESSION_KEY, session);
+/* ─── Session ─────────────────────────────────────────────────── */
+export async function saveSession(ctx: vscode.ExtensionContext, s: StoredSession) {
+    await ctx.globalState.update(SESSION_KEY, s);
 }
 
-export function getSession(context: vscode.ExtensionContext): StoredSession | undefined {
-    return context.globalState.get<StoredSession>(SESSION_KEY);
+export function getSession(ctx: vscode.ExtensionContext): StoredSession | undefined {
+    return ctx.globalState.get<StoredSession>(SESSION_KEY);
 }
 
-export function clearSession(context: vscode.ExtensionContext): void {
-    context.globalState.update(SESSION_KEY, undefined);
-    context.globalState.update(VIEW_STATE_KEY, undefined);
+export async function clearSession(ctx: vscode.ExtensionContext) {
+    await ctx.globalState.update(SESSION_KEY, undefined);
+    await ctx.globalState.update(VIEW_KEY, undefined);
+    await ctx.globalState.update(DASHBOARD_KEY, undefined);
 }
 
-export function updateIdol(context: vscode.ExtensionContext, idolHandle: string, idolInfo: UserStats): void {
-    const session = getSession(context);
-    if (session) {
-        session.idolHandle = idolHandle;
-        session.idolInfo = idolInfo;
-        saveSession(context, session);
+export async function updateIdol(ctx: vscode.ExtensionContext, idolHandle: string, idolInfo: UserStats) {
+    const s = getSession(ctx);
+    if (s) {
+        s.idolHandle = idolHandle;
+        s.idolInfo = idolInfo;
+        await saveSession(ctx, s);
     }
 }
 
-export function saveViewState(context: vscode.ExtensionContext, viewState: StoredViewState): void {
-    context.globalState.update(VIEW_STATE_KEY, viewState);
+/* ─── View State ──────────────────────────────────────────────── */
+export async function saveViewState(ctx: vscode.ExtensionContext, vs: SavedViewState) {
+    await ctx.globalState.update(VIEW_KEY, vs);
 }
 
-export function getViewState(context: vscode.ExtensionContext): StoredViewState | undefined {
-    return context.globalState.get<StoredViewState>(VIEW_STATE_KEY);
+export function getViewState(ctx: vscode.ExtensionContext): SavedViewState | undefined {
+    return ctx.globalState.get<SavedViewState>(VIEW_KEY);
 }
 
-export function updateCurrentProblem(context: vscode.ExtensionContext, problem: ProblemContent): void {
-    const viewState: StoredViewState = {
-        currentView: 'problem-solving',
-        currentProblemId: `${problem.contestId}${problem.index}`,
-        currentProblem: problem
-    };
-    saveViewState(context, viewState);
+/* ─── Dashboard Cache ─────────────────────────────────────────── */
+export async function saveDashboardData(ctx: vscode.ExtensionContext, data: SavedDashboardData) {
+    await ctx.globalState.update(DASHBOARD_KEY, data);
 }
 
-export function updateCurrentView(context: vscode.ExtensionContext, view: ViewState): void {
-    const existing = getViewState(context);
-    const viewState: StoredViewState = {
-        currentView: view,
-        currentProblemId: existing?.currentProblemId,
-        currentProblem: view === 'problem-solving' ? existing?.currentProblem : undefined
-    };
-    saveViewState(context, viewState);
+export function getDashboardData(ctx: vscode.ExtensionContext): SavedDashboardData | undefined {
+    return ctx.globalState.get<SavedDashboardData>(DASHBOARD_KEY);
 }

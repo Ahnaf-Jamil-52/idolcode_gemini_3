@@ -37,336 +37,470 @@ exports.SidebarProvider = void 0;
 const vscode = __importStar(require("vscode"));
 const api = __importStar(require("./api"));
 const storage_1 = require("./storage");
-const workspaceManager_1 = require("./utils/workspaceManager");
-const testRunner_1 = require("./runner/testRunner");
-const ProblemPanel_1 = require("./webview/ProblemPanel");
 class SidebarProvider {
     constructor(_extensionUri, _context) {
         this._extensionUri = _extensionUri;
         this._context = _context;
-        this._currentView = 'wakeup';
-        this._userSolvedProblems = new Set();
         this._serverReady = false;
-    }
-    resolveWebviewView(webviewView, context, _token) {
-        this._view = webviewView;
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [this._extensionUri]
-        };
-        // Start with wakeup view
         this._currentView = 'wakeup';
-        webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
-        // Handle messages from webview
-        webviewView.webview.onDidReceiveMessage(async (data) => {
-            switch (data.type) {
-                case 'login':
-                    await this._handleLogin(data.handle);
-                    break;
-                case 'selectIdol':
-                    await this._handleSelectIdol(data.handle);
-                    break;
-                case 'searchIdol':
-                    await this._handleSearchIdol(data.query);
-                    break;
-                case 'solveProblem':
-                    await this._handleSolveProblem(data.contestId, data.index);
-                    break;
-                case 'backToWorkspace':
-                    this._currentView = 'workspace';
-                    (0, storage_1.updateCurrentView)(this._context, 'workspace');
+        this._busy = false;
+        this._cancelled = false;
+        // Dashboard data (mirrors frontend state)
+        this._comparison = null;
+        this._recommendations = [];
+        this._recDescription = '';
+        this._skillComparison = null;
+        this._history = [];
+        this._solvedProblems = new Set();
+        // Problem view data
+        this._currentProblem = null;
+        this._testResults = [];
+    }
+    /* ═══════════════════════════════════════════════════════════════
+       Webview Lifecycle
+       ═══════════════════════════════════════════════════════════════ */
+    resolveWebviewView(view) {
+        this._view = view;
+        view.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.joinPath(this._extensionUri, 'webview')],
+        };
+        view.webview.html = this._getHtml(view.webview);
+        view.webview.onDidReceiveMessage(async (msg) => {
+            switch (msg.type) {
+                case 'ready': return this._init();
+                case 'login': return this._handleAuth(msg.handle, msg.password, false);
+                case 'register': return this._handleAuth(msg.handle, msg.password, true);
+                case 'selectIdol': return this._handleSelectIdol(msg.handle);
+                case 'searchIdol': return this._handleSearchIdol(msg.query);
+                case 'refreshAll': return this._loadDashboard(true);
+                case 'refreshRecs': return this._refreshRecs();
+                case 'checkSubmissions': return this._checkSubmissions();
+                case 'solveProblem': return this._openProblem(msg.contestId, msg.index);
+                case 'backToDashboard':
+                    this._currentView = 'dashboard';
+                    await (0, storage_1.saveViewState)(this._context, { currentView: 'dashboard' });
                     this._updateWebview();
-                    break;
+                    return;
+                case 'runTests': return this._runTests();
                 case 'changeIdol':
-                    this.showIdolSelection();
-                    break;
+                    this._currentView = 'idol-selection';
+                    await (0, storage_1.saveViewState)(this._context, { currentView: 'idol-selection' });
+                    this._updateWebview();
+                    return;
                 case 'logout':
-                    (0, storage_1.clearSession)(this._context);
+                    this._cancelled = true;
+                    await (0, storage_1.clearSession)(this._context);
+                    this._resetData();
+                    this._serverReady = false;
+                    this._busy = false;
                     this._currentView = 'login';
                     this._updateWebview();
-                    break;
-                case 'ready':
-                    await this._initializeServer();
-                    break;
-                case 'retryWakeup':
-                    await this._initializeServer();
-                    break;
-                case 'runTests':
-                    await this._handleRunTests();
-                    break;
-                case 'openProblemPanel':
-                    this._openProblemInWebview();
-                    break;
+                    return;
+                case 'customizeSkills':
+                    return this._loadCustomSkills(msg.topics);
             }
         });
     }
-    async _initializeServer() {
-        this._currentView = 'wakeup';
-        this._updateWebview();
-        const isReady = await api.wakeUpServer((status) => {
-            this._sendMessage({ type: 'wakeupStatus', message: status });
-        });
-        if (isReady) {
-            this._serverReady = true;
-            // Check for existing session
+    /* ═══════════════════════════════════════════════════════════════
+       Init — show cached data instantly, fetch fresh in background
+       ═══════════════════════════════════════════════════════════════ */
+    async _init() {
+        console.log('[IdolCode] _init called, busy:', this._busy);
+        if (this._busy) {
+            this._updateWebview();
+            return;
+        }
+        this._busy = true;
+        this._cancelled = false;
+        try {
             const session = (0, storage_1.getSession)(this._context);
-            if (session) {
-                if (session.idolHandle) {
-                    // Check for saved view state (e.g., problem-solving)
-                    const savedViewState = (0, storage_1.getViewState)(this._context);
-                    if (savedViewState?.currentView === 'problem-solving' && savedViewState?.currentProblem) {
-                        // Restore to problem-solving view
-                        this._currentProblem = savedViewState.currentProblem;
-                        this._currentView = 'problem-solving';
-                    }
-                    else {
-                        this._currentView = 'workspace';
-                    }
-                    await this._loadWorkspaceData();
+            console.log('[IdolCode] session:', session ? `${session.userHandle}, idol: ${session.idolHandle}` : 'none');
+            // ── Returning user with idol: show cached dashboard instantly ──
+            if (session?.idolHandle) {
+                const cached = (0, storage_1.getDashboardData)(this._context);
+                if (cached) {
+                    this._comparison = cached.comparison;
+                    this._recommendations = cached.recommendations;
+                    this._recDescription = cached.recDescription;
+                    this._skillComparison = cached.skillComparison;
+                    this._history = cached.history;
+                    this._solvedProblems = new Set(cached.solvedProblems);
+                }
+                const savedView = (0, storage_1.getViewState)(this._context);
+                if (savedView?.currentView === 'problem' && savedView.currentProblem) {
+                    this._currentProblem = savedView.currentProblem;
+                    this._currentView = 'problem';
                 }
                 else {
-                    this._currentView = 'idol-selection';
+                    this._currentView = 'dashboard';
+                }
+                this._updateWebview();
+                this._busy = false;
+                // Background: wake server + refresh
+                try {
+                    if (!this._serverReady) {
+                        const ready = await api.wakeUpServer();
+                        if (this._cancelled)
+                            return;
+                        if (ready) {
+                            this._serverReady = true;
+                            await this._loadDashboard(false);
+                        }
+                    }
+                    else {
+                        await this._loadDashboard(false);
+                    }
+                }
+                catch (e) {
+                    console.error('[IdolCode] Background refresh error:', e);
+                }
+                return;
+            }
+            // ── No idol: need server for login/idol selection ──
+            console.log('[IdolCode] No idol path, serverReady:', this._serverReady);
+            if (!this._serverReady) {
+                this._currentView = 'wakeup';
+                this._updateWebview();
+                try {
+                    const ready = await api.wakeUpServer(s => {
+                        console.log('[IdolCode] wakeup status:', s);
+                        this._send({ type: 'wakeupStatus', message: s });
+                    });
+                    console.log('[IdolCode] wakeup result:', ready, 'cancelled:', this._cancelled);
+                    if (this._cancelled) {
+                        this._busy = false;
+                        return;
+                    }
+                    if (!ready) {
+                        this._send({ type: 'wakeupFailed' });
+                        this._busy = false;
+                        return;
+                    }
+                    this._serverReady = true;
+                }
+                catch (e) {
+                    console.error('[IdolCode] Wakeup error:', e);
+                    this._send({ type: 'wakeupFailed' });
+                    this._busy = false;
+                    return;
                 }
             }
-            else {
-                this._currentView = 'login';
+            const nextView = session ? 'idol-selection' : 'login';
+            console.log('[IdolCode] Transitioning to:', nextView);
+            this._currentView = nextView;
+            this._updateWebview();
+            this._busy = false;
+        }
+        catch (err) {
+            console.error('[IdolCode] _init error:', err);
+            try {
+                const session = (0, storage_1.getSession)(this._context);
+                this._currentView = session?.idolHandle ? 'dashboard' : session ? 'idol-selection' : 'login';
+                this._updateWebview();
             }
-            this._updateWebview();
-        }
-        else {
-            this._sendMessage({ type: 'wakeupFailed' });
+            catch (e2) {
+                console.error('[IdolCode] _init recovery error:', e2);
+            }
+            this._busy = false;
         }
     }
-    refresh() {
-        this._currentView = 'login';
-        this._updateWebview();
-    }
-    showIdolSelection() {
-        this._currentView = 'idol-selection';
-        (0, storage_1.updateCurrentView)(this._context, 'idol-selection');
-        this._updateWebview();
-    }
-    /**
-     * Handle active file change - detect problem folder and auto-switch view
-     */
-    async handleActiveFileChange(fileUri) {
-        if (!this._serverReady)
-            return;
-        const filePath = fileUri.fsPath;
-        // Check if we're in a problem folder (format: {contestId}{index}_{ProblemName})
-        const match = filePath.match(/[/\\](\d+)([A-Z]\d?)[_]([^/\\]+)[/\\]/i);
-        if (!match)
-            return;
-        const contestId = parseInt(match[1]);
-        const index = match[2].toUpperCase();
-        const problemId = `${contestId}${index}`;
-        // If we're already viewing this problem, no need to reload
-        if (this._currentProblem &&
-            this._currentProblem.contestId === contestId &&
-            this._currentProblem.index === index) {
-            return;
-        }
-        // Try to load this problem
+    /* ═══════════════════════════════════════════════════════════════
+       Auth
+       ═══════════════════════════════════════════════════════════════ */
+    async _handleAuth(handle, password, isRegister) {
+        this._busy = true;
         try {
-            const problem = await api.getProblemContent(contestId, index);
-            this._currentProblem = problem;
-            (0, storage_1.updateCurrentProblem)(this._context, problem);
-            this._currentView = 'problem-solving';
-            this._updateWebview();
-        }
-        catch (error) {
-            // Silently fail - user may be in a folder that looks like a problem but isn't
-            console.log(`Could not load problem ${problemId}:`, error);
-        }
-    }
-    /**
-     * Open the current problem in a webview panel for viewing and test extraction
-     */
-    _openProblemInWebview() {
-        if (!this._currentProblem) {
-            vscode.window.showWarningMessage('No problem selected');
-            return;
-        }
-        const problemId = `${this._currentProblem.contestId}${this._currentProblem.index}`;
-        const folderPath = (0, workspaceManager_1.getProblemFolderPath)(problemId, this._currentProblem.name);
-        ProblemPanel_1.ProblemPanel.createOrShow(this._extensionUri, this._currentProblem.contestId, this._currentProblem.index, this._currentProblem.name, folderPath || undefined);
-    }
-    async _handleLogin(handle) {
-        try {
-            this._sendMessage({ type: 'loading', loading: true });
-            const userInfo = await api.validateUser(handle);
+            this._send({ type: 'loading', show: true });
+            const result = isRegister
+                ? await api.authRegister(handle, password)
+                : await api.authLogin(handle, password);
+            if (!result.success)
+                throw new Error('Authentication failed');
             const session = {
-                userHandle: handle,
-                userInfo: userInfo
+                userHandle: result.handle,
+                userInfo: { handle: result.handle, rating: result.rating, maxRating: result.maxRating, avatar: result.avatar },
             };
-            (0, storage_1.saveSession)(this._context, session);
+            await (0, storage_1.saveSession)(this._context, session);
+            if (result.idol) {
+                await (0, storage_1.updateIdol)(this._context, result.idol, {});
+                this._currentView = 'dashboard';
+                await (0, storage_1.saveViewState)(this._context, { currentView: 'dashboard' });
+                this._send({ type: 'loading', show: false });
+                this._updateWebview();
+                this._busy = false;
+                vscode.window.showInformationMessage(`Welcome${isRegister ? '' : ' back'}, ${result.handle}!`);
+                await this._loadDashboard(false);
+                return;
+            }
             this._currentView = 'idol-selection';
-            this._sendMessage({ type: 'loading', loading: false });
+            await (0, storage_1.saveViewState)(this._context, { currentView: 'idol-selection' });
+            this._send({ type: 'loading', show: false });
             this._updateWebview();
-            vscode.window.showInformationMessage(`Welcome, ${userInfo.handle}!`);
+            this._busy = false;
+            vscode.window.showInformationMessage(`Welcome, ${result.handle}! Choose your idol.`);
         }
-        catch (error) {
-            this._sendMessage({ type: 'loading', loading: false });
-            this._sendMessage({
-                type: 'error',
-                message: error.response?.status === 404
-                    ? 'Codeforces user not found'
-                    : 'Error validating handle'
-            });
+        catch (err) {
+            this._busy = false;
+            this._send({ type: 'loading', show: false });
+            this._send({ type: 'error', message: err.response?.data?.detail || (isRegister ? 'Registration failed' : 'Login failed') });
         }
     }
+    /* ═══════════════════════════════════════════════════════════════
+       Idol Selection
+       ═══════════════════════════════════════════════════════════════ */
     async _handleSelectIdol(idolHandle) {
+        this._busy = true;
         try {
-            this._sendMessage({ type: 'loading', loading: true });
+            this._send({ type: 'loading', show: true });
             const session = (0, storage_1.getSession)(this._context);
-            if (!session) {
-                throw new Error('No session found');
+            if (!session)
+                throw new Error('No session');
+            await (0, storage_1.updateIdol)(this._context, idolHandle, {});
+            try {
+                await api.saveIdol(session.userHandle, idolHandle);
             }
-            const comparison = await api.compareUsers(session.userHandle, idolHandle);
-            (0, storage_1.updateIdol)(this._context, idolHandle, comparison.idol);
-            this._comparison = comparison;
-            this._currentView = 'workspace';
-            this._sendMessage({ type: 'loading', loading: false });
-            await this._loadWorkspaceData();
+            catch (e) {
+                console.error('Failed to save idol to backend:', e);
+            }
+            this._currentView = 'dashboard';
+            await (0, storage_1.saveViewState)(this._context, { currentView: 'dashboard' });
+            this._send({ type: 'loading', show: false });
             this._updateWebview();
+            this._busy = false;
+            await this._loadDashboard(true);
         }
-        catch (error) {
-            this._sendMessage({ type: 'loading', loading: false });
-            this._sendMessage({
-                type: 'error',
-                message: 'Error selecting idol: ' + (error.message || 'Unknown error')
-            });
+        catch (err) {
+            this._busy = false;
+            this._send({ type: 'loading', show: false });
+            this._send({ type: 'error', message: 'Error selecting idol: ' + (err.message || 'Unknown') });
         }
     }
     async _handleSearchIdol(query) {
+        if (query.length < 2) {
+            this._send({ type: 'searchResults', results: [] });
+            return;
+        }
         try {
-            if (query.length < 2) {
-                this._sendMessage({ type: 'searchResults', results: [] });
-                return;
-            }
             const results = await api.searchCoders(query);
-            this._sendMessage({ type: 'searchResults', results });
+            this._send({ type: 'searchResults', results });
         }
-        catch (error) {
-            this._sendMessage({ type: 'searchResults', results: [] });
-        }
-    }
-    async _handleSolveProblem(contestId, index) {
-        try {
-            this._sendMessage({ type: 'loading', loading: true });
-            const problem = await api.getProblemContent(contestId, index);
-            this._currentProblem = problem;
-            // Set up the workspace with folder and files
-            const problemId = `${contestId}${index}`;
-            await (0, workspaceManager_1.setupProblemWorkspace)(problemId, problem.name, problem.examples);
-            // Persist current problem state for restoration on restart
-            (0, storage_1.updateCurrentProblem)(this._context, problem);
-            this._currentView = 'problem-solving';
-            this._sendMessage({ type: 'loading', loading: false });
-            this._updateWebview();
-            // Automatically open the problem in a webview panel
-            const folderPath = (0, workspaceManager_1.getProblemFolderPath)(problemId, problem.name);
-            ProblemPanel_1.ProblemPanel.createOrShow(this._extensionUri, contestId, index, problem.name, folderPath || undefined);
-        }
-        catch (error) {
-            this._sendMessage({ type: 'loading', loading: false });
-            this._sendMessage({
-                type: 'error',
-                message: 'Error loading problem: ' + (error.message || 'Unknown error')
-            });
+        catch {
+            this._send({ type: 'searchResults', results: [] });
         }
     }
-    async _handleRunTests() {
-        if (!this._currentProblem) {
-            this._sendMessage({
-                type: 'testResults',
-                success: false,
-                error: 'No problem selected'
-            });
+    /* ═══════════════════════════════════════════════════════════════
+       Dashboard Data Loading
+       ═══════════════════════════════════════════════════════════════ */
+    async _loadDashboard(refresh) {
+        const session = (0, storage_1.getSession)(this._context);
+        if (!session?.idolHandle || !session.userHandle)
             return;
-        }
-        const problemId = `${this._currentProblem.contestId}${this._currentProblem.index}`;
-        const folderPath = (0, workspaceManager_1.getProblemFolderPath)(problemId, this._currentProblem.name);
-        if (!folderPath) {
-            this._sendMessage({
-                type: 'testResults',
-                success: false,
-                error: 'Please open a folder to run tests'
-            });
+        if (this._cancelled)
             return;
-        }
-        // Send running state
-        this._sendMessage({ type: 'testRunning', running: true });
+        this._send({ type: 'dashLoading', loading: true });
         try {
-            // Fallback fetch function to get tests from Codeforces if tests.json is missing
-            const fetchTestsFallback = async () => {
-                if (!this._currentProblem)
-                    return null;
-                try {
-                    const problem = await api.getProblemContent(this._currentProblem.contestId, this._currentProblem.index);
-                    return problem.examples || null;
-                }
-                catch (e) {
-                    return null;
-                }
-            };
-            const result = await testRunner_1.testRunner.runAllTests(folderPath, fetchTestsFallback);
-            this._sendMessage({
-                type: 'testResults',
-                ...result
-            });
+            const data = await api.getDashboardData(session.userHandle, session.idolHandle, refresh);
+            if (this._cancelled)
+                return;
+            if (data.comparison) {
+                this._comparison = data.comparison;
+                if (data.comparison.idol)
+                    await (0, storage_1.updateIdol)(this._context, session.idolHandle, data.comparison.idol);
+            }
+            if (data.recommendations) {
+                this._recommendations = data.recommendations.recommendations || [];
+                this._recDescription = data.recommendations.description || '';
+            }
+            if (data.skillComparison) {
+                this._skillComparison = data.skillComparison;
+            }
+            this._history = data.history || [];
+            try {
+                const solved = await api.getUserSolvedProblems(session.userHandle);
+                if (!this._cancelled)
+                    this._solvedProblems = new Set(solved);
+            }
+            catch { /* ignore */ }
+            if (!this._cancelled) {
+                await (0, storage_1.saveDashboardData)(this._context, {
+                    comparison: this._comparison,
+                    recommendations: this._recommendations,
+                    recDescription: this._recDescription,
+                    skillComparison: this._skillComparison,
+                    history: this._history,
+                    solvedProblems: Array.from(this._solvedProblems),
+                });
+            }
         }
-        catch (error) {
-            this._sendMessage({
-                type: 'testResults',
-                success: false,
-                error: error.message || 'Unknown error running tests'
-            });
+        catch (err) {
+            console.error('Error loading dashboard:', err);
         }
         finally {
-            // Always ensure we send testRunning: false to prevent stuck state
-            this._sendMessage({ type: 'testRunning', running: false });
-        }
-    }
-    async _loadWorkspaceData() {
-        const session = (0, storage_1.getSession)(this._context);
-        if (!session?.idolHandle)
-            return;
-        try {
-            // Load comparison if not already loaded
-            if (!this._comparison) {
-                this._comparison = await api.compareUsers(session.userHandle, session.idolHandle);
+            if (!this._cancelled) {
+                this._send({ type: 'dashLoading', loading: false });
+                this._updateWebview();
             }
-            // Load journey
-            this._journey = await api.getIdolJourney(session.idolHandle, 0, 100);
-            // Load user's solved problems
-            const solved = await api.getUserSolvedProblems(session.userHandle);
-            this._userSolvedProblems = new Set(solved);
-        }
-        catch (error) {
-            console.error('Error loading workspace data:', error);
         }
     }
-    _sendMessage(message) {
-        if (this._view) {
-            this._view.webview.postMessage(message);
+    async _refreshRecs() {
+        const session = (0, storage_1.getSession)(this._context);
+        if (!session?.idolHandle || !session.userHandle)
+            return;
+        this._send({ type: 'dashLoading', loading: true });
+        try {
+            const recs = await api.getRecommendations(session.userHandle, session.idolHandle, true);
+            this._recommendations = recs.recommendations || [];
+            this._recDescription = recs.description || '';
         }
+        catch (e) {
+            console.error('Rec refresh error:', e);
+        }
+        finally {
+            this._send({ type: 'dashLoading', loading: false });
+            this._updateWebview();
+        }
+    }
+    async _loadCustomSkills(topics) {
+        const session = (0, storage_1.getSession)(this._context);
+        if (!session?.idolHandle || !session.userHandle)
+            return;
+        this._send({ type: 'skillsLoading', loading: true });
+        try {
+            const skill = await api.getSkillComparison(session.userHandle, session.idolHandle, topics);
+            this._skillComparison = skill;
+            this._updateWebview();
+        }
+        catch (e) {
+            console.error('Custom skills error:', e);
+        }
+        finally {
+            this._send({ type: 'skillsLoading', loading: false });
+        }
+    }
+    /* ═══════════════════════════════════════════════════════════════
+       Check CF Submissions
+       ═══════════════════════════════════════════════════════════════ */
+    async _checkSubmissions() {
+        const session = (0, storage_1.getSession)(this._context);
+        if (!session?.userHandle || this._recommendations.length === 0)
+            return;
+        this._send({ type: 'checkingSubmissions', checking: true });
+        try {
+            const ids = this._recommendations.map(r => r.problemId);
+            const results = await api.checkSubmissions(session.userHandle, ids);
+            const solvedList = [];
+            for (const [pid, info] of Object.entries(results)) {
+                if (info.solved) {
+                    this._solvedProblems.add(pid);
+                    const rec = this._recommendations.find(r => r.problemId === pid);
+                    if (rec) {
+                        solvedList.push(rec);
+                        api.recordProblemAttempt({
+                            userHandle: session.userHandle,
+                            idolHandle: session.idolHandle,
+                            problemId: rec.problemId,
+                            contestId: rec.contestId,
+                            index: rec.index,
+                            name: rec.name,
+                            rating: rec.rating,
+                            tags: rec.tags,
+                            difficulty: rec.difficulty,
+                            status: 'solved',
+                        }).catch(() => { });
+                    }
+                }
+            }
+            if (solvedList.length > 0) {
+                vscode.window.showInformationMessage(`Detected ${solvedList.length} solved problem(s)! Refreshing…`);
+                await this._loadDashboard(true);
+            }
+            else {
+                vscode.window.showInformationMessage('No new solutions detected.');
+            }
+        }
+        catch {
+            vscode.window.showErrorMessage('Failed to check submissions.');
+        }
+        this._send({ type: 'checkingSubmissions', checking: false });
+    }
+    /* ═══════════════════════════════════════════════════════════════
+       Problem View
+       ═══════════════════════════════════════════════════════════════ */
+    async _openProblem(contestId, index) {
+        try {
+            this._send({ type: 'loading', show: true });
+            this._currentProblem = await api.getProblemContent(contestId, index);
+            this._testResults = [];
+            this._currentView = 'problem';
+            await (0, storage_1.saveViewState)(this._context, { currentView: 'problem', currentProblem: this._currentProblem });
+            this._send({ type: 'loading', show: false });
+            this._updateWebview();
+        }
+        catch {
+            this._send({ type: 'loading', show: false });
+            this._send({ type: 'error', message: 'Failed to load problem' });
+        }
+    }
+    async _runTests() {
+        if (!this._currentProblem)
+            return;
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            this._send({ type: 'error', message: 'Open a source file in the editor first' });
+            return;
+        }
+        const code = editor.document.getText();
+        const langMap = {
+            python: 'python', javascript: 'javascript', typescript: 'javascript',
+            cpp: 'cpp', c: 'cpp', java: 'java',
+        };
+        const lang = langMap[editor.document.languageId] || editor.document.languageId;
+        this._send({ type: 'testsRunning', running: true });
+        try {
+            this._testResults = await api.testCode(code, lang, this._currentProblem.examples);
+            this._send({ type: 'testResults', results: this._testResults });
+        }
+        catch (err) {
+            this._send({ type: 'testResults', results: [], error: err.message || 'Test execution failed' });
+        }
+        this._send({ type: 'testsRunning', running: false });
+    }
+    /* ═══════════════════════════════════════════════════════════════
+       Helpers
+       ═══════════════════════════════════════════════════════════════ */
+    _resetData() {
+        this._comparison = null;
+        this._recommendations = [];
+        this._recDescription = '';
+        this._skillComparison = null;
+        this._history = [];
+        this._solvedProblems.clear();
+        this._currentProblem = null;
+        this._testResults = [];
+    }
+    _send(msg) {
+        this._view?.webview.postMessage(msg);
     }
     _updateWebview() {
-        if (this._view) {
-            const session = (0, storage_1.getSession)(this._context);
-            this._sendMessage({
-                type: 'updateState',
-                view: this._currentView,
-                session: session,
-                comparison: this._comparison,
-                journey: this._journey,
-                problem: this._currentProblem,
-                solvedProblems: Array.from(this._userSolvedProblems)
-            });
-        }
+        if (!this._view)
+            return;
+        const session = (0, storage_1.getSession)(this._context);
+        this._send({
+            type: 'updateState',
+            view: this._currentView,
+            session,
+            comparison: this._comparison,
+            recommendations: this._recommendations,
+            recDescription: this._recDescription,
+            skillComparison: this._skillComparison,
+            history: this._history,
+            solvedProblems: Array.from(this._solvedProblems),
+            problem: this._currentProblem,
+            testResults: this._testResults,
+        });
     }
-    _getHtmlForWebview(webview) {
+    _getHtml(webview) {
         const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'webview', 'styles.css'));
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'webview', 'main.js'));
         const nonce = getNonce();
@@ -375,29 +509,47 @@ class SidebarProvider {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} https:;">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none';
+                   style-src ${webview.cspSource} 'unsafe-inline' https://cdn.jsdelivr.net;
+                   script-src 'nonce-${nonce}' https://cdn.jsdelivr.net;
+                   font-src https://cdn.jsdelivr.net;
+                   img-src ${webview.cspSource} https:;
+                   connect-src http://localhost:* https://*;">
     <link href="${styleUri}" rel="stylesheet">
     <title>Idolcode</title>
 </head>
 <body>
     <div id="app">
-        <div id="loading-overlay" class="hidden">
-            <div class="spinner"></div>
+        <div id="loading-overlay" class="hidden"><div class="spinner"></div></div>
+        <div id="content">
+            <div class="view-center">
+                <div style="font-size:40px;margin-bottom:8px">🚀</div>
+                <h2>Starting Idolcode</h2>
+                <p id="wakeup-status" style="color:#9ca3af">Loading…</p>
+                <div class="spinner" style="margin-top:16px"></div>
+            </div>
         </div>
-        <div id="content"></div>
     </div>
+    <script nonce="${nonce}">
+        window.onerror = function(msg, src, line, col, err) {
+            var el = document.getElementById('wakeup-status');
+            if (el) el.textContent = 'Error: ' + msg;
+            console.error('Webview error:', msg, src, line, col, err);
+        };
+    </script>
     <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;
     }
 }
 exports.SidebarProvider = SidebarProvider;
+SidebarProvider.viewType = 'idolcode-sidebar';
 function getNonce() {
-    let text = '';
-    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 32; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let nonce = '';
+    for (let i = 0; i < 32; i++)
+        nonce += chars.charAt(Math.floor(Math.random() * chars.length));
+    return nonce;
 }
 //# sourceMappingURL=SidebarProvider.js.map

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './ui/button';
-import { Menu, X, LogOut, User } from 'lucide-react';
+import { Menu, X, LogOut, User, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, idol, isAuthenticated, logout } = useAuth();
+  const canAccessDashboard = isAuthenticated && !!idol;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -62,6 +63,24 @@ export const Navbar = () => {
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-primary to-accent group-hover:w-full transition-all duration-300"></span>
               </a>
             ))}
+          </div>
+
+          {/* Dashboard Button */}
+          <div className="hidden md:flex items-center">
+            <Button
+              variant="ghost"
+              disabled={!canAccessDashboard}
+              onClick={() => canAccessDashboard && navigate(`/dashboard/${idol.handle}`)}
+              className={`relative group ${
+                canAccessDashboard
+                  ? 'text-foreground hover:text-primary hover:bg-primary/10 cursor-pointer'
+                  : 'text-foreground/30 cursor-not-allowed opacity-50'
+              }`}
+              title={!isAuthenticated ? 'Login to access Dashboard' : !idol ? 'Select an idol to access Dashboard' : `Go to Dashboard (${idol.handle})`}
+            >
+              <LayoutDashboard className="w-4 h-4 mr-2" />
+              Dashboard
+            </Button>
           </div>
 
           {/* Desktop Auth Buttons */}
@@ -122,6 +141,26 @@ export const Navbar = () => {
                 {link.name}
               </a>
             ))}
+            {/* Mobile Dashboard Button */}
+            <Button
+              variant="ghost"
+              disabled={!canAccessDashboard}
+              onClick={() => {
+                if (canAccessDashboard) {
+                  navigate(`/dashboard/${idol.handle}`);
+                  setIsMobileMenuOpen(false);
+                }
+              }}
+              className={`w-full justify-start ${
+                canAccessDashboard
+                  ? 'text-foreground hover:text-primary hover:bg-primary/10'
+                  : 'text-foreground/30 cursor-not-allowed opacity-50'
+              }`}
+            >
+              <LayoutDashboard className="w-4 h-4 mr-2" />
+              Dashboard
+            </Button>
+
             <div className="flex flex-col space-y-2 pt-4">
               {isAuthenticated ? (
                 <>

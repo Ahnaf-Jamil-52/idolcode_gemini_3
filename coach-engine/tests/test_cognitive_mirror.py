@@ -102,15 +102,19 @@ class TestFailureArchetypeDetector:
         """Test detection of Speed Demon archetype."""
         detector = FailureArchetypeDetector()
         
-        # Create attempts showing speed demon pattern
+        # Create attempts showing speed demon pattern - rushes through problems
+        verdicts = ["WA", "WA", "RTE", "WA", "RTE"]  # Mix of WA and RTE from rushing
+        times = [250, 300, 200, 350, 280]  # Very fast (< 6 min for 15 min problems)
+        submissions = [2, 3, 2, 3, 2]  # Fewer attempts (rushes to submit)
+        
         for i in range(5):
             attempt = ProblemAttempt(
                 problem_id=800 + i,
                 timestamp=datetime.now() - timedelta(hours=5-i),
-                time_spent_seconds=300,  # Too fast (5 min)
-                submission_count=4,
-                final_verdict="WA",  # Wrong answer from rushing
-                tags=["implementation"],
+                time_spent_seconds=times[i],
+                submission_count=submissions[i],
+                final_verdict=verdicts[i],
+                tags=["greedy", "implementation"],  # Prefers quick greedy solutions
                 difficulty=1000,
                 rapid_submissions=True
             )

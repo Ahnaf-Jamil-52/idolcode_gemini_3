@@ -18,6 +18,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/profile/:handle" element={<Profile />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dashboard/:handle" element={<Dashboard />} />
             <Route path="/workspace/:contestId/:problemIndex" element={<Workspace />} />
           </Routes>

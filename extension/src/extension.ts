@@ -1,48 +1,28 @@
 import * as vscode from 'vscode';
 import { SidebarProvider } from './SidebarProvider';
-import { clearSession } from './storage';
 
 export function activate(context: vscode.ExtensionContext) {
-    console.log('Idolcode extension is now active!');
+    const provider = new SidebarProvider(context.extensionUri, context);
 
-    // Create sidebar provider
-    const sidebarProvider = new SidebarProvider(context.extensionUri, context);
-
-    // Register the webview view provider
     context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider(
-            'idolcode-panel',
-            sidebarProvider
-        )
+        vscode.window.registerWebviewViewProvider(SidebarProvider.viewType, provider, {
+            webviewOptions: { retainContextWhenHidden: true },
+        }),
     );
 
-    // Track active editor changes to auto-detect problem folders
     context.subscriptions.push(
-        vscode.window.onDidChangeActiveTextEditor((editor) => {
-            if (editor) {
-                sidebarProvider.handleActiveFileChange(editor.document.uri);
-            }
-        })
+        vscode.commands.registerCommand('idolcode.refresh', () => {
+            vscode.commands.executeCommand('workbench.view.extension.idolcode-panel');
+        }),
     );
 
-    // Register logout command
     context.subscriptions.push(
-        vscode.commands.registerCommand('idolcode.logout', () => {
-            clearSession(context);
-            sidebarProvider.refresh();
-            vscode.window.showInformationMessage('Logged out of Idolcode');
-        })
-    );
-
-    // Register change idol command
-    context.subscriptions.push(
-        vscode.commands.registerCommand('idolcode.changeIdol', () => {
-            sidebarProvider.showIdolSelection();
-        })
+        vscode.commands.registerCommand('idolcode.resetData', async () => {
+            const keys = ['idolcode.session', 'idolcode.viewState', 'idolcode.dashboardData'];
+            for (const k of keys) await context.globalState.update(k, undefined);
+            vscode.window.showInformationMessage('Idolcode data cleared. Reload to start fresh.');
+        }),
     );
 }
 
-export function deactivate() {
-    console.log('Idolcode extension deactivated');
-}
-
+export function deactivate() {}

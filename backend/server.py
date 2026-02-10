@@ -435,6 +435,10 @@ class AuthLogin(BaseModel):
     handle: str
     password: str
 
+class IdolUpdate(BaseModel):
+    handle: str
+    idolHandle: str
+
 
 def hash_password(password: str, salt: str = None) -> dict:
     """Hash password with SHA-256 + salt."""
@@ -507,6 +511,7 @@ async def register_user(data: AuthRegister):
         "rating": cf_user.get("rating"),
         "maxRating": cf_user.get("maxRating"),
         "avatar": cf_user.get("avatar"),
+        "idol": None,
     }
 
 
@@ -531,6 +536,9 @@ async def login_user(data: AuthLogin):
     if not verify_password(password, user["passwordHash"], user["salt"]):
         raise HTTPException(status_code=401, detail="Invalid password")
 
+    # Get saved idol handle
+    saved_idol = user.get("idolHandle")
+
     # Fetch latest CF info
     try:
         async with httpx.AsyncClient(timeout=10.0) as http_client:
@@ -547,6 +555,7 @@ async def login_user(data: AuthLogin):
                         "rating": cf_user.get("rating"),
                         "maxRating": cf_user.get("maxRating"),
                         "avatar": cf_user.get("avatar"),
+                        "idol": saved_idol,
                     }
     except Exception:
         pass
@@ -558,6 +567,109 @@ async def login_user(data: AuthLogin):
         "rating": user.get("rating"),
         "maxRating": user.get("maxRating"),
         "avatar": user.get("avatar"),
+        "idol": saved_idol,
+    }
+
+
+# ── Idol Sync Endpoints ──────────────────────────────────────────────────
+
+@api_router.put("/auth/idol")
+async def save_user_idol(data: IdolUpdate):
+    """
+    Save or update the user's selected idol in the database.
+    Both frontend and extension call this after idol selection.
+    """
+    handle = data.handle.strip().lower()
+    idol_handle = data.idolHandle.strip()
+
+    if not handle or not idol_handle:
+        raise HTTPException(status_code=400, detail="Handle and idolHandle are required")
+
+    result = await db.users.update_one(
+        {"handle": handle},
+        {"$set": {"idolHandle": idol_handle, "idolUpdatedAt": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"success": True, "idol": idol_handle}
+
+
+@api_router.get("/auth/idol/{user_handle}")
+async def get_user_idol(user_handle: str):
+    """
+    Get the user's currently saved idol from the database.
+    """
+    handle = user_handle.strip().lower()
+    user = await db.users.find_one({"handle": handle}, {"_id": 0, "idolHandle": 1})
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"idol": user.get("idolHandle")}
+
+
+# ── Dashboard Data Endpoint (All-in-one cached) ─────────────────────────
+
+@api_router.get("/dashboard-data/{user_handle}")
+async def get_dashboard_data(user_handle: str, refresh: bool = False, idol: Optional[str] = None):
+    """
+    Single endpoint that returns all dashboard data from MongoDB cache.
+    If refresh=true, re-fetches everything from Codeforces API and updates cache.
+    Clients should call this on page load (without refresh) and only use refresh=true
+    when user explicitly clicks a Refresh button.
+    Optional idol param overrides the DB-stored idol (useful when idol was just changed).
+    """
+    handle = user_handle.strip().lower()
+    user_doc = await db.users.find_one({"handle": handle}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    idol_handle = idol.strip().lower() if idol else user_doc.get("idolHandle")
+    if not idol_handle:
+        return {"idol": None, "comparison": None, "recommendations": None, "skillComparison": None, "history": []}
+
+    comparison = None
+    recommendations_data = None
+    skill_data = None
+    history = []
+
+    # --- Comparison ---
+    try:
+        comp_resp = await compare_users(handle, idol_handle, refresh=refresh)
+        comparison = comp_resp.model_dump() if hasattr(comp_resp, 'model_dump') else comp_resp
+    except Exception as e:
+        logger.error(f"Dashboard comparison error: {e}")
+
+    # --- Recommendations (already has 24h cache in its own endpoint) ---
+    try:
+        rec_resp = await get_recommendations(handle, idol_handle, refresh=refresh)
+        recommendations_data = rec_resp.model_dump() if hasattr(rec_resp, 'model_dump') else rec_resp
+    except Exception as e:
+        logger.error(f"Dashboard recommendations error: {e}")
+
+    # --- Skill Comparison ---
+    try:
+        skill_data = await get_skill_comparison(handle, idol_handle, topics=None, refresh=refresh)
+    except Exception as e:
+        logger.error(f"Dashboard skill comparison error: {e}")
+
+    # --- Problem History (already DB-based) ---
+    try:
+        attempts = await db.problem_history.find(
+            {"userHandle": handle}, {"_id": 0}
+        ).sort("attemptedAt", -1).limit(50).to_list(50)
+        history = attempts
+    except Exception as e:
+        logger.error(f"Dashboard history error: {e}")
+
+    return {
+        "idol": idol_handle,
+        "comparison": comparison,
+        "recommendations": recommendations_data,
+        "skillComparison": skill_data,
+        "history": history,
     }
 
 
@@ -781,15 +893,32 @@ async def get_skill_comparison(
     user_handle: str,
     idol_handle: str,
     topics: Optional[str] = Query(None, description="Comma-separated custom topics to focus on"),
+    refresh: bool = False,
 ):
     """
     Compare user skills with idol's skills *at a similar rank*.
-    Returns:
-    - Topic comparison stats (User vs Idol)
-    - Top 3 weakest topics to improve (or custom-selected topics)
-    - 3 suggested problems per weak topic from Idol's history
-    - Full list of all Codeforces topic tags for customize UI
+    Caches in MongoDB. Use refresh=true to force re-fetch from Codeforces.
     """
+    cache_key = f"{user_handle.lower()}_{idol_handle.lower()}"
+    custom_topic_list = [t.strip() for t in topics.split(",")] if topics else []
+
+    # Check MongoDB cache (only for non-custom requests)
+    if not refresh and not custom_topic_list:
+        try:
+            cached = await db.skill_comparison_cache.find_one({"cacheKey": cache_key}, {"_id": 0})
+            if cached and cached.get("cachedAt"):
+                age_hours = (datetime.now(timezone.utc) - datetime.fromisoformat(cached["cachedAt"])).total_seconds() / 3600
+                if age_hours < 24:
+                    return {
+                        "stats": cached.get("stats", []),
+                        "weakestTopics": cached.get("weakestTopics", []),
+                        "userRating": cached.get("userRating", 0),
+                        "idolRatingAtComparison": cached.get("idolRatingAtComparison", 0),
+                        "allTopics": cached.get("allTopics", []),
+                    }
+        except Exception:
+            pass
+
     # 1. Fetch data
     try:
         user_info = await fetch_user_info(user_handle)
@@ -971,13 +1100,26 @@ async def get_skill_comparison(
         "trees", "two pointers",
     ])
 
-    return {
+    result = {
         "stats": comparison_stats,  # Full list for visualization
         "weakestTopics": weakest_topics,  # Top 3 with recommendations
         "userRating": user_rating,
         "idolRatingAtComparison": user_rating,  # Now comparing against full history
         "allTopics": ALL_CF_TAGS,  # For customize overlay
     }
+
+    # Save to MongoDB cache (only for default non-custom requests)
+    if not custom_topic_list:
+        try:
+            await db.skill_comparison_cache.update_one(
+                {"cacheKey": cache_key},
+                {"$set": {**result, "cacheKey": cache_key, "cachedAt": datetime.now(timezone.utc).isoformat()}},
+                upsert=True,
+            )
+        except Exception as e:
+            logger.error(f"Failed to cache skill comparison: {e}")
+
+    return result
 
 
 @api_router.get("/coders/search", response_model=List[CoderSuggestion])
@@ -1265,10 +1407,24 @@ async def get_idol_journey(
 
 
 @api_router.get("/user/{handle}/solved-problems")
-async def get_user_solved_problems(handle: str):
+async def get_user_solved_problems(handle: str, refresh: bool = False):
     """
-    Get list of problem IDs that the user has solved
+    Get list of problem IDs that the user has solved.
+    Caches in MongoDB. Use refresh=true to force re-fetch from Codeforces.
     """
+    cache_key = handle.lower()
+
+    # Check cache first
+    if not refresh:
+        try:
+            cached = await db.solved_problems_cache.find_one({"handle": cache_key}, {"_id": 0})
+            if cached and cached.get("cachedAt"):
+                age_hours = (datetime.now(timezone.utc) - datetime.fromisoformat(cached["cachedAt"])).total_seconds() / 3600
+                if age_hours < 24:
+                    return {"handle": handle, "solvedProblems": cached.get("solvedProblems", [])}
+        except Exception:
+            pass
+
     try:
         async with httpx.AsyncClient(timeout=15.0) as http_client:
             response = await http_client.get(
@@ -1290,8 +1446,20 @@ async def get_user_solved_problems(handle: str):
                     index = problem.get("index", "")
                     if contest_id and index:
                         solved_problems.add(f"{contest_id}{index}")
-            
-            return {"handle": handle, "solvedProblems": list(solved_problems)}
+
+            solved_list = list(solved_problems)
+
+            # Save to cache
+            try:
+                await db.solved_problems_cache.update_one(
+                    {"handle": cache_key},
+                    {"$set": {"handle": cache_key, "solvedProblems": solved_list, "cachedAt": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
+            except Exception as e:
+                logger.error(f"Failed to cache solved problems: {e}")
+
+            return {"handle": handle, "solvedProblems": solved_list}
             
     except HTTPException:
         raise
@@ -1433,10 +1601,29 @@ async def generate_smart_curriculum(request: SmartCurriculumRequest):
 
 
 @api_router.get("/compare/{user_handle}/{idol_handle}", response_model=ComparisonData)
-async def compare_users(user_handle: str, idol_handle: str):
+async def compare_users(user_handle: str, idol_handle: str, refresh: bool = False):
     """
-    Compare user stats with idol stats
+    Compare user stats with idol stats.
+    Caches in MongoDB. Use refresh=true to force re-fetch from Codeforces.
     """
+    cache_key = f"{user_handle.lower()}_{idol_handle.lower()}"
+
+    # Check MongoDB cache first (unless refresh requested)
+    if not refresh:
+        try:
+            cached = await db.comparison_cache.find_one({"cacheKey": cache_key}, {"_id": 0})
+            if cached and cached.get("cachedAt"):
+                age_hours = (datetime.now(timezone.utc) - datetime.fromisoformat(cached["cachedAt"])).total_seconds() / 3600
+                if age_hours < 24:
+                    return ComparisonData(
+                        user=UserStats(**cached["user"]),
+                        idol=UserStats(**cached["idol"]),
+                        progressPercent=cached["progressPercent"],
+                        userAhead=cached["userAhead"],
+                    )
+        except Exception:
+            pass  # cache miss, fetch fresh
+
     try:
         # Fetch both user stats in parallel
         user_stats_task = get_user_stats(user_handle)
@@ -1452,13 +1639,32 @@ async def compare_users(user_handle: str, idol_handle: str):
         
         progress_percent = min(100, (user_problems / idol_problems) * 100)
         user_ahead = (user_stats.rating or 0) >= (idol_stats.rating or 0)
-        
-        return ComparisonData(
+
+        result = ComparisonData(
             user=user_stats,
             idol=idol_stats,
             progressPercent=round(progress_percent, 1),
             userAhead=user_ahead
         )
+
+        # Save to MongoDB cache
+        try:
+            await db.comparison_cache.update_one(
+                {"cacheKey": cache_key},
+                {"$set": {
+                    "cacheKey": cache_key,
+                    "user": user_stats.model_dump(),
+                    "idol": idol_stats.model_dump(),
+                    "progressPercent": result.progressPercent,
+                    "userAhead": result.userAhead,
+                    "cachedAt": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+        except Exception as e:
+            logger.error(f"Failed to cache comparison: {e}")
+
+        return result
         
     except HTTPException:
         raise

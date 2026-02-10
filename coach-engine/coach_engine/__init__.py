@@ -1,5 +1,5 @@
 """
-Coach Engine - Burnout Detection & Sentiment Analysis + Cognitive Mirror
+Coach Engine - Burnout Detection & Sentiment Analysis + Cognitive Mirror + Real-Time Coaching
 
 A behavioral signal processing system for detecting user burnout,
 analyzing sentiment, and providing adaptive coaching responses.
@@ -15,6 +15,13 @@ Cognitive Mirror System:
 6. Failure Archetypes (pattern matcher) - failure_archetypes.py
 7. Problem Intent Engine (why this problem) - problem_intent.py
 8. Cognitive Mirror (metacognition) - cognitive_mirror.py
+
+Real-Time Coaching System:
+9. Real-Time Detector (live signals) - realtime_detector.py
+10. Duck TTS (voice output) - duck_tts.py
+11. Interventions (coaching decisions) - interventions.py
+12. Live Cognitive Mirror (live metacognition) - live_cognitive_mirror.py
+13. Real-Time Coach (orchestrator) - realtime_coach.py
 """
 
 from .signals import (
@@ -101,7 +108,44 @@ from .cognitive_mirror import (
     ReflectionType,
 )
 
-__version__ = "0.2.0"
+from .realtime_detector import (
+    RealtimeDetector,
+    RealtimeSignal,
+    RealtimeDetection,
+    TypingEvent,
+    CodeSnapshot,
+)
+
+from .duck_tts import (
+    DuckVoice,
+    VoiceMood,
+    DuckPhrases,
+    get_duck_voice,
+    duck_speak,
+)
+
+from .interventions import (
+    InterventionSelector,
+    InterventionType,
+    InterventionContext,
+    Intervention,
+    select_and_deliver,
+)
+
+from .live_cognitive_mirror import (
+    LiveCognitiveMirror,
+    LiveCognitiveInsight,
+    CognitiveBlock,
+)
+
+from .realtime_coach import (
+    RealtimeCoach,
+    RealtimeCoachContext,
+    CoachingUpdate,
+    get_realtime_coach,
+)
+
+__version__ = "0.3.0"
 __all__ = [
     # Signals
     "SignalCollector",
@@ -165,4 +209,31 @@ __all__ = [
     "CognitiveReflection",
     "MirrorSession",
     "ReflectionType",
+    # Real-Time Coaching - Detector
+    "RealtimeDetector",
+    "RealtimeSignal",
+    "RealtimeDetection",
+    "TypingEvent",
+    "CodeSnapshot",
+    # Real-Time Coaching - TTS
+    "DuckVoice",
+    "VoiceMood",
+    "DuckPhrases",
+    "get_duck_voice",
+    "duck_speak",
+    # Real-Time Coaching - Interventions
+    "InterventionSelector",
+    "InterventionType",
+    "InterventionContext",
+    "Intervention",
+    "select_and_deliver",
+    # Real-Time Coaching - Live Cognitive Mirror
+    "LiveCognitiveMirror",
+    "LiveCognitiveInsight",
+    "CognitiveBlock",
+    # Real-Time Coaching - Coordinator
+    "RealtimeCoach",
+    "RealtimeCoachContext",
+    "CoachingUpdate",
+    "get_realtime_coach",
 ]

@@ -26,19 +26,19 @@
       "idolcode-sidebar": [
         {
           "type": "webview",
-          "id": "idolcode-panel",
+          "id": "idolcode-sidebar",
           "name": "Idolcode"
         }
       ]
     },
     "commands": [
       {
-        "command": "idolcode.logout",
-        "title": "Idolcode: Logout"
+        "command": "idolcode.refresh",
+        "title": "Idolcode: Refresh"
       },
       {
-        "command": "idolcode.changeIdol",
-        "title": "Idolcode: Change Idol"
+        "command": "idolcode.resetData",
+        "title": "Idolcode: Reset All Data"
       }
     ],
     "configuration": {
@@ -46,7 +46,7 @@
       "properties": {
         "idolcode.backendUrl": {
           "type": "string",
-          "default": "http://0.0.0.0:8000",
+          "default": "http://localhost:8000",
           "description": "Backend API URL for Idolcode"
         }
       }

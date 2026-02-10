@@ -38,75 +38,106 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkServerHealth = checkServerHealth;
 exports.wakeUpServer = wakeUpServer;
-exports.validateUser = validateUser;
-exports.getUserStats = getUserStats;
-exports.getIdolJourney = getIdolJourney;
-exports.compareUsers = compareUsers;
-exports.getProblemContent = getProblemContent;
+exports.authLogin = authLogin;
+exports.authRegister = authRegister;
+exports.saveIdol = saveIdol;
 exports.searchCoders = searchCoders;
+exports.getDashboardData = getDashboardData;
+exports.getSkillComparison = getSkillComparison;
+exports.getProblemContent = getProblemContent;
+exports.testCode = testCode;
+exports.checkSubmissions = checkSubmissions;
+exports.recordProblemAttempt = recordProblemAttempt;
+exports.getRecommendations = getRecommendations;
 exports.getUserSolvedProblems = getUserSolvedProblems;
+exports.getProblemHistory = getProblemHistory;
+exports.recordProblemHistory = recordProblemHistory;
 const axios_1 = __importDefault(require("axios"));
 const vscode = __importStar(require("vscode"));
+/* ─── Helpers ────────────────────────────────────────────────────── */
 function getBackendUrl() {
     return vscode.workspace.getConfiguration('idolcode').get('backendUrl') || 'http://localhost:8000';
 }
+/* ─── API Functions ──────────────────────────────────────────────── */
 async function checkServerHealth() {
     try {
-        const response = await axios_1.default.get(`${getBackendUrl()}/api/`, { timeout: 30000 });
-        return response.status === 200;
+        const r = await axios_1.default.get(`${getBackendUrl()}/api/`, { timeout: 10000 });
+        return r.status === 200;
     }
-    catch (error) {
+    catch {
         return false;
     }
 }
-async function wakeUpServer(onStatusUpdate) {
-    const maxRetries = 3;
-    const retryDelay = 5000;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        onStatusUpdate?.(`Waking up server... (attempt ${attempt}/${maxRetries})`);
-        const isHealthy = await checkServerHealth();
-        if (isHealthy) {
-            onStatusUpdate?.('Server is ready!');
+async function wakeUpServer(onStatus) {
+    for (let i = 1; i <= 3; i++) {
+        onStatus?.(`Waking up server… (attempt ${i}/3)`);
+        if (await checkServerHealth()) {
+            onStatus?.('Server is ready!');
             return true;
         }
-        if (attempt < maxRetries) {
-            onStatusUpdate?.(`Server is sleeping, retrying in ${retryDelay / 1000}s...`);
-            await new Promise(resolve => setTimeout(resolve, retryDelay));
+        if (i < 3) {
+            onStatus?.('Server is sleeping, retrying in 5s…');
+            await new Promise(r => setTimeout(r, 5000));
         }
     }
-    onStatusUpdate?.('Server could not be reached');
+    onStatus?.('Server could not be reached');
     return false;
 }
-async function validateUser(handle) {
-    const response = await axios_1.default.get(`${getBackendUrl()}/api/user/${handle}/info`);
-    return response.data;
+async function authLogin(handle, password) {
+    const r = await axios_1.default.post(`${getBackendUrl()}/api/auth/login`, { handle, password }, { timeout: 15000 });
+    return r.data;
 }
-async function getUserStats(handle) {
-    const response = await axios_1.default.get(`${getBackendUrl()}/api/user/${handle}/stats`);
-    return response.data;
+async function authRegister(handle, password) {
+    const r = await axios_1.default.post(`${getBackendUrl()}/api/auth/register`, { handle, password }, { timeout: 30000 });
+    return r.data;
 }
-async function getIdolJourney(handle, offset = 0, limit = 100) {
-    const response = await axios_1.default.get(`${getBackendUrl()}/api/idol/${handle}/journey`, {
-        params: { offset, limit }
-    });
-    return response.data;
-}
-async function compareUsers(userHandle, idolHandle) {
-    const response = await axios_1.default.get(`${getBackendUrl()}/api/compare/${userHandle}/${idolHandle}`);
-    return response.data;
-}
-async function getProblemContent(contestId, problemIndex) {
-    const response = await axios_1.default.get(`${getBackendUrl()}/api/problem/${contestId}/${problemIndex}`);
-    return response.data;
+async function saveIdol(handle, idolHandle) {
+    return axios_1.default.put(`${getBackendUrl()}/api/auth/idol`, { handle, idolHandle }, { timeout: 10000 });
 }
 async function searchCoders(query) {
-    const response = await axios_1.default.get(`${getBackendUrl()}/api/coders/search`, {
-        params: { query, limit: 5 }
-    });
-    return response.data;
+    const r = await axios_1.default.get(`${getBackendUrl()}/api/coders/search`, { params: { query, limit: 5 }, timeout: 10000 });
+    return r.data;
+}
+async function getDashboardData(userHandle, idolHandle, refresh = false) {
+    const r = await axios_1.default.get(`${getBackendUrl()}/api/dashboard-data/${userHandle}`, { params: { refresh, idol: idolHandle }, timeout: 120000 });
+    return r.data;
+}
+async function getSkillComparison(userHandle, idolHandle, topics) {
+    const params = {};
+    if (topics && topics.length > 0) {
+        params.topics = topics.join(',');
+    }
+    const r = await axios_1.default.get(`${getBackendUrl()}/api/skill-comparison/${userHandle}/${idolHandle}`, { params, timeout: 30000 });
+    return r.data;
+}
+async function getProblemContent(contestId, index) {
+    const r = await axios_1.default.get(`${getBackendUrl()}/api/problem/${contestId}/${index}`, { timeout: 15000 });
+    return r.data;
+}
+async function testCode(code, language, testCases) {
+    const r = await axios_1.default.post(`${getBackendUrl()}/api/test-code`, { code, language, testCases }, { timeout: 60000 });
+    return r.data.results;
+}
+async function checkSubmissions(userHandle, problemIds) {
+    const r = await axios_1.default.get(`${getBackendUrl()}/api/check-submissions/${userHandle}`, { params: { problem_ids: problemIds.join(',') }, timeout: 30000 });
+    return r.data;
+}
+async function recordProblemAttempt(data) {
+    return axios_1.default.post(`${getBackendUrl()}/api/problem-attempt`, data, { timeout: 10000 });
+}
+async function getRecommendations(userHandle, idolHandle, refresh = false) {
+    const r = await axios_1.default.get(`${getBackendUrl()}/api/recommendations/${userHandle}/${idolHandle}`, { params: { refresh }, timeout: 60000 });
+    return r.data;
 }
 async function getUserSolvedProblems(handle) {
-    const response = await axios_1.default.get(`${getBackendUrl()}/api/user/${handle}/solved-problems`);
-    return response.data.solvedProblems;
+    const r = await axios_1.default.get(`${getBackendUrl()}/api/user/${handle}/solved-problems`, { timeout: 10000 });
+    return r.data.solvedProblems;
+}
+async function getProblemHistory(handle) {
+    const r = await axios_1.default.get(`${getBackendUrl()}/api/problem-history/${handle}`, { timeout: 10000 });
+    return r.data.history || [];
+}
+async function recordProblemHistory(data) {
+    return axios_1.default.post(`${getBackendUrl()}/api/problem-history`, data, { timeout: 10000 });
 }
 //# sourceMappingURL=api.js.map

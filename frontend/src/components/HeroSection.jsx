@@ -17,7 +17,7 @@ export const HeroSection = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
-  const { isAuthenticated, selectIdol } = useAuth();
+  const { isAuthenticated, idol, selectIdol } = useAuth();
 
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -205,6 +205,17 @@ export const HeroSection = () => {
               </div>
             </form>
 
+            {/* Currently Selected Idol Indicator */}
+            {isAuthenticated && idol && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl glass-card border border-primary/30 max-w-xl mx-auto lg:mx-0 animate-in fade-in duration-500">
+                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                <span className="text-sm text-muted-foreground">
+                  Current idol: <span className="text-primary font-semibold">{idol.handle}</span>
+                </span>
+                <span className="text-xs text-muted-foreground/60">— search above to change</span>
+              </div>
+            )}
+
             {/* Confirmation Modal */}
             {selectedCoder && (
               <ConfirmationModal
@@ -212,6 +223,7 @@ export const HeroSection = () => {
                 onClose={() => setShowConfirmModal(false)}
                 onConfirm={handleConfirmSelection}
                 coderHandle={selectedCoder.handle}
+                isChange={!!idol}
               />
             )}
 

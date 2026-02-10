@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
 
 const AuthContext = createContext(null);
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -35,12 +38,27 @@ export const AuthProvider = ({ children }) => {
     const userData = { handle: userHandle, ...userInfo };
     setUser(userData);
     localStorage.setItem('idolcode_user', JSON.stringify(userData));
+
+    // If backend returned a saved idol, restore it
+    if (userInfo.idol) {
+      const idolData = { handle: userInfo.idol };
+      setIdol(idolData);
+      localStorage.setItem('idolcode_idol', JSON.stringify(idolData));
+    }
   };
 
   const selectIdol = (idolHandle, idolInfo) => {
     const idolData = { handle: idolHandle, ...idolInfo };
     setIdol(idolData);
     localStorage.setItem('idolcode_idol', JSON.stringify(idolData));
+
+    // Persist idol to backend database
+    if (user?.handle) {
+      axios.put(`${BACKEND_URL}/api/auth/idol`, {
+        handle: user.handle,
+        idolHandle: idolHandle,
+      }).catch(err => console.error('Failed to save idol to DB:', err));
+    }
   };
 
   const logout = () => {

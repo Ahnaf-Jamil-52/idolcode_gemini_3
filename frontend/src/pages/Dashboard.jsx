@@ -69,9 +69,20 @@ const StatCard = ({ icon: Icon, label, userValue, idolValue, comparison }) => {
 
 // Main Dashboard Component
 export const Dashboard = () => {
-  const { handle: idolHandle } = useParams();
+  const { handle: urlIdolHandle } = useParams();
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoading: isAuthLoading, selectIdol } = useAuth();
+  const { user, idol, isAuthenticated, isLoading: isAuthLoading, selectIdol } = useAuth();
+
+  // Use URL param if provided, otherwise fall back to saved idol
+  const idolHandle = urlIdolHandle || idol?.handle;
+
+  // If no idol handle at all, redirect to home
+  useEffect(() => {
+    if (!isAuthLoading && isAuthenticated && !idolHandle) {
+      toast.error('Please select a coding idol first');
+      navigate('/');
+    }
+  }, [isAuthLoading, isAuthenticated, idolHandle, navigate]);
 
   // State
   const [comparison, setComparison] = useState(null);
@@ -87,6 +98,7 @@ export const Dashboard = () => {
   const [problemHistory, setProblemHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isCheckingSubmissions, setIsCheckingSubmissions] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Check if user is logged in (wait for auth to finish loading)
   useEffect(() => {
@@ -96,51 +108,61 @@ export const Dashboard = () => {
     }
   }, [isAuthenticated, isAuthLoading, navigate, idolHandle]);
 
-  // Fetch comparison data
-  useEffect(() => {
-    const fetchComparison = async () => {
-      if (isAuthLoading || !user?.handle || !idolHandle) return;
+  // Load all dashboard data from cache (single call)
+  const loadDashboard = useCallback(async (refresh = false) => {
+    if (isAuthLoading || !user?.handle || !idolHandle) return;
+
+    if (refresh) {
+      setIsRefreshing(true);
+    } else {
       setIsLoadingComparison(true);
-      try {
-        const response = await axios.get(`${BACKEND_URL}/api/compare/${user.handle}/${idolHandle}`);
-        setComparison(response.data);
-        selectIdol(idolHandle, response.data.idol);
-      } catch (error) {
-        console.error('Error fetching comparison:', error);
-        toast.error('Error loading comparison data');
-      } finally {
-        setIsLoadingComparison(false);
-      }
-    };
-    fetchComparison();
-  }, [isAuthLoading, user?.handle, idolHandle, selectIdol]);
-
-  // Fetch topic-aligned recommendations (new engine)
-  useEffect(() => {
-    const fetchRecommendations = async () => {
-      if (!user?.handle || !idolHandle) return;
       setIsLoadingRecs(true);
-      setRecError(null);
-      try {
-        const response = await axios.get(
-          `${BACKEND_URL}/api/recommendations/${user.handle}/${idolHandle}`
-        );
-        setRecommendations(response.data.recommendations || []);
-        setRecDescription(response.data.description || '');
-      } catch (error) {
-        console.error('Error fetching recommendations:', error);
-        setRecError(
-          error.response?.data?.detail ||
-          'Unable to load recommendations. Please try again later.'
-        );
-      } finally {
-        setIsLoadingRecs(false);
-      }
-    };
-    fetchRecommendations();
-  }, [user?.handle, idolHandle]);
+      setIsLoadingHistory(true);
+    }
 
-  // Fetch problem history
+    try {
+      const response = await axios.get(
+        `${BACKEND_URL}/api/dashboard-data/${user.handle}?refresh=${refresh}&idol=${idolHandle}`
+      );
+      const data = response.data;
+
+      if (data.comparison) {
+        setComparison(data.comparison);
+      }
+
+      if (data.recommendations) {
+        setRecommendations(data.recommendations.recommendations || []);
+        setRecDescription(data.recommendations.description || '');
+        setRecError(null);
+      }
+
+      setProblemHistory(data.history || []);
+
+      if (refresh) {
+        toast.success('Dashboard refreshed with latest data!');
+      }
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+      if (refresh) {
+        toast.error('Failed to refresh dashboard');
+      } else {
+        toast.error('Error loading dashboard data');
+      }
+    } finally {
+      setIsLoadingComparison(false);
+      setIsLoadingRecs(false);
+      setIsLoadingHistory(false);
+      setIsRefreshing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthLoading, user?.handle, idolHandle]);
+
+  // Load from cache on mount (no CF API calls)
+  useEffect(() => {
+    loadDashboard(false);
+  }, [loadDashboard]);
+
+  // Fetch problem history only (lightweight, DB-based)
   const fetchHistory = useCallback(async () => {
     if (!user?.handle) return;
     setIsLoadingHistory(true);
@@ -153,10 +175,6 @@ export const Dashboard = () => {
       setIsLoadingHistory(false);
     }
   }, [user?.handle]);
-
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
 
   // Handle solve button click — navigate to workspace (history is recorded on submit)
   const handleSolve = (problem) => {
@@ -227,50 +245,8 @@ export const Dashboard = () => {
 
       toast.success(`Detected ${solvedProblems.length} solved problem(s)! Refreshing recommendations...`);
 
-      // Refresh recommendations based on highest solved difficulty
-      // Hard → refresh all, Medium → refresh Easy+Medium, Easy → refresh only Easy
-      setIsLoadingRecs(true);
-      try {
-        const response = await axios.get(
-          `${BACKEND_URL}/api/recommendations/${user.handle}/${idolHandle}?refresh=true`
-        );
-
-        const newRecs = response.data.recommendations || [];
-
-        if (highestSolvedDifficulty === 'Hard') {
-          // Refresh all cards
-          setRecommendations(newRecs);
-        } else if (highestSolvedDifficulty === 'Medium') {
-          // Keep Hard, refresh Easy + Medium
-          const existingHard = recommendations.find(r => r.difficulty === 'Hard');
-          const freshNonHard = newRecs.filter(r => r.difficulty !== 'Hard');
-          const newHard = newRecs.find(r => r.difficulty === 'Hard');
-          setRecommendations([
-            ...freshNonHard,
-            existingHard || newHard,
-          ].filter(Boolean));
-        } else {
-          // Easy: keep Medium + Hard, refresh Easy only
-          const existingMedium = recommendations.find(r => r.difficulty === 'Medium');
-          const existingHard = recommendations.find(r => r.difficulty === 'Hard');
-          const freshEasy = newRecs.find(r => r.difficulty === 'Easy');
-          setRecommendations([
-            freshEasy || newRecs[0],
-            existingMedium || newRecs.find(r => r.difficulty === 'Medium'),
-            existingHard || newRecs.find(r => r.difficulty === 'Hard'),
-          ].filter(Boolean));
-        }
-
-        setRecDescription(response.data.description || recDescription);
-      } catch (err) {
-        console.error('Error refreshing recommendations:', err);
-        toast.error('Failed to refresh recommendations');
-      } finally {
-        setIsLoadingRecs(false);
-      }
-
-      // Also refresh history
-      fetchHistory();
+      // Refresh entire dashboard since we solved problems (this also refreshes stats from CF)
+      await loadDashboard(true);
     } catch (error) {
       console.error('Error checking submissions:', error);
       toast.error('Failed to check Codeforces submissions');
@@ -338,6 +314,15 @@ export const Dashboard = () => {
               You're <span className="text-primary font-bold">{progressPercent.toFixed(1)}%</span> closer to being equals
             </p>
           )}
+          <Button
+            onClick={() => loadDashboard(true)}
+            disabled={isRefreshing}
+            variant="outline"
+            className="mt-4 border-primary/30 hover:bg-primary/10"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Refreshing...' : 'Refresh Stats'}
+          </Button>
         </div>
 
         {/* Stats Comparison */}

@@ -19,11 +19,13 @@ class CoachState(Enum):
     States in the burnout detection state machine.
     
     State flow:
-    NORMAL → WATCHING → WARNING → PROTECTIVE → RECOVERY → NORMAL
+    SILENT → WATCHING → HINTING → WARNING → PROTECTIVE → RECOVERY → NORMAL → SILENT
     """
+    SILENT = "silent"           # Duck is observing, completely quiet
     NORMAL = "normal"           # Default state, normal operation
     WATCHING = "watching"       # Coach paying attention, subtle monitoring
-    WARNING = "warning"         # Ghost slows, coach speaks up
+    HINTING = "hinting"         # Gentle hints, asking questions
+    WARNING = "warning"         # Ghost slows, coach speaks up clearly
     PROTECTIVE = "protective"   # Cooperative mode, rest suggestions
     RECOVERY = "recovery"       # Gentle re-engagement after rest
 
@@ -94,9 +96,11 @@ class CoachStateMachine:
     
     # Define valid transitions (from_state -> [to_states])
     VALID_TRANSITIONS: Dict[CoachState, List[CoachState]] = {
-        CoachState.NORMAL: [CoachState.WATCHING],
-        CoachState.WATCHING: [CoachState.NORMAL, CoachState.WARNING],
-        CoachState.WARNING: [CoachState.WATCHING, CoachState.PROTECTIVE],
+        CoachState.SILENT: [CoachState.NORMAL, CoachState.WATCHING],
+        CoachState.NORMAL: [CoachState.SILENT, CoachState.WATCHING],
+        CoachState.WATCHING: [CoachState.NORMAL, CoachState.HINTING],
+        CoachState.HINTING: [CoachState.WATCHING, CoachState.WARNING],
+        CoachState.WARNING: [CoachState.HINTING, CoachState.PROTECTIVE],
         CoachState.PROTECTIVE: [CoachState.WARNING, CoachState.RECOVERY],
         CoachState.RECOVERY: [CoachState.PROTECTIVE, CoachState.NORMAL],
     }
@@ -104,15 +108,19 @@ class CoachStateMachine:
     # State-specific thresholds
     THRESHOLDS = {
         "score_to_watching": 0.30,
+        "score_to_hinting": 0.40,
         "score_to_warning": 0.50,
         "score_to_protective": 0.70,
         "trend_trigger": 0.1,  # Trend slope that triggers escalation
         "recovery_score": 0.30,  # Score to drop to for recovery
+        "loss_streak_hinting": 2,
         "loss_streak_warning": 3,
         "loss_streak_protective": 5,
+        "failures_hinting": 2,
         "failures_warning": 3,
         "failures_protective": 5,
         "successful_sessions_to_normal": 2,
+        "realtime_signal_threshold": 2,  # Number of realtime signals to trigger hinting
     }
     
     def __init__(self):
@@ -154,7 +162,8 @@ class CoachStateMachine:
         burnout_score: float,
         trend: Optional[TrendAnalysis] = None,
         consecutive_failures: int = 0,
-        ghost_loss_streak: int = 0
+        ghost_loss_streak: int = 0,
+        realtime_signal_count: int = 0
     ) -> Optional[CoachState]:
         """
         Determine if we should transition to a new state.
@@ -170,22 +179,45 @@ class CoachStateMachine:
             return None
         
         # State-specific transition logic
-        if current == CoachState.NORMAL:
+        if current == CoachState.SILENT:
+            # Move to WATCHING if any activity detected
+            if (burnout_score >= self.THRESHOLDS["score_to_watching"] or
+                realtime_signal_count > 0):
+                return CoachState.WATCHING
+            # Can also go straight to NORMAL if things are stable
+            if burnout_score < 0.1:
+                return CoachState.NORMAL
+        
+        elif current == CoachState.NORMAL:
             # Escalate to WATCHING
             if (burnout_score >= self.THRESHOLDS["score_to_watching"] or
                 trend_slope > self.THRESHOLDS["trend_trigger"]):
                 return CoachState.WATCHING
+            # Can go to SILENT if user is doing well independently
+            if burnout_score < 0.1 and consecutive_failures == 0:
+                return CoachState.SILENT
         
         elif current == CoachState.WATCHING:
-            # Escalate to WARNING
-            if (burnout_score >= self.THRESHOLDS["score_to_warning"] or
-                ghost_loss_streak >= self.THRESHOLDS["loss_streak_warning"] or
-                consecutive_failures >= self.THRESHOLDS["failures_warning"]):
-                return CoachState.WARNING
+            # Escalate to HINTING if realtime signals detected
+            if (burnout_score >= self.THRESHOLDS["score_to_hinting"] or
+                realtime_signal_count >= self.THRESHOLDS["realtime_signal_threshold"] or
+                ghost_loss_streak >= self.THRESHOLDS["loss_streak_hinting"]):
+                return CoachState.HINTING
             # De-escalate to NORMAL
             if (burnout_score < self.THRESHOLDS["score_to_watching"] - 0.05 and
                 trend_direction != TrendDirection.DETERIORATING):
                 return CoachState.NORMAL
+        
+        elif current == CoachState.HINTING:
+            # Escalate to WARNING if signals persist
+            if (burnout_score >= self.THRESHOLDS["score_to_warning"] or
+                ghost_loss_streak >= self.THRESHOLDS["loss_streak_warning"] or
+                consecutive_failures >= self.THRESHOLDS["failures_warning"]):
+                return CoachState.WARNING
+            # De-escalate to WATCHING if user adapts
+            if (burnout_score < self.THRESHOLDS["score_to_hinting"] - 0.05 and
+                realtime_signal_count < 2):
+                return CoachState.WATCHING
         
         elif current == CoachState.WARNING:
             # Escalate to PROTECTIVE
@@ -193,10 +225,10 @@ class CoachStateMachine:
                 ghost_loss_streak >= self.THRESHOLDS["loss_streak_protective"] or
                 consecutive_failures >= self.THRESHOLDS["failures_protective"]):
                 return CoachState.PROTECTIVE
-            # De-escalate to WATCHING
+            # De-escalate to HINTING
             if (burnout_score < self.THRESHOLDS["score_to_warning"] - 0.05 and
                 trend_direction == TrendDirection.RECOVERING):
-                return CoachState.WATCHING
+                return CoachState.HINTING
         
         elif current == CoachState.PROTECTIVE:
             # Move to RECOVERY when user rests or score drops significantly
@@ -224,7 +256,8 @@ class CoachStateMachine:
         trend: Optional[TrendAnalysis] = None,
         consecutive_failures: int = 0,
         ghost_loss_streak: int = 0,
-        session_successful: Optional[bool] = None
+        session_successful: Optional[bool] = None,
+        realtime_signal_count: int = 0
     ) -> Optional[StateTransition]:
         """
         Update state machine with new data.
@@ -235,6 +268,7 @@ class CoachStateMachine:
             consecutive_failures: Number of consecutive problem failures
             ghost_loss_streak: Number of consecutive ghost race losses
             session_successful: If session just ended, was it successful?
+            realtime_signal_count: Number of active realtime signals
             
         Returns:
             StateTransition if a transition occurred, None otherwise
@@ -254,7 +288,8 @@ class CoachStateMachine:
             burnout_score.score,
             trend,
             consecutive_failures,
-            ghost_loss_streak
+            ghost_loss_streak,
+            realtime_signal_count
         )
         
         if next_state and self._can_transition(self.current_state, next_state):
@@ -351,35 +386,54 @@ class CoachStateMachine:
         state = self.current_state
         
         actions = {
+            CoachState.SILENT: {
+                "ghost_speed": "normal",
+                "coach_mode": "silent",
+                "show_breaks": False,
+                "intervention_level": "none",
+                "tts_enabled": False,
+            },
             CoachState.NORMAL: {
                 "ghost_speed": "normal",
                 "coach_mode": "passive",
                 "show_breaks": False,
                 "intervention_level": "none",
+                "tts_enabled": False,
             },
             CoachState.WATCHING: {
                 "ghost_speed": "normal",
                 "coach_mode": "attentive",
                 "show_breaks": False,
                 "intervention_level": "monitor",
+                "tts_enabled": False,
+            },
+            CoachState.HINTING: {
+                "ghost_speed": "normal",
+                "coach_mode": "questioning",
+                "show_breaks": False,
+                "intervention_level": "gentle",
+                "tts_enabled": True,
             },
             CoachState.WARNING: {
                 "ghost_speed": "slow",
                 "coach_mode": "proactive",
                 "show_breaks": True,
-                "intervention_level": "gentle",
+                "intervention_level": "moderate",
+                "tts_enabled": True,
             },
             CoachState.PROTECTIVE: {
                 "ghost_speed": "cooperative",
                 "coach_mode": "supportive",
                 "show_breaks": True,
                 "intervention_level": "active",
+                "tts_enabled": True,
             },
             CoachState.RECOVERY: {
                 "ghost_speed": "encouraging",
                 "coach_mode": "celebratory",
                 "show_breaks": False,
                 "intervention_level": "positive",
+                "tts_enabled": True,
             },
         }
         

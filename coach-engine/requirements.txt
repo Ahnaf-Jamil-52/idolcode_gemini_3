@@ -3,6 +3,9 @@
 pytest>=7.0.0
 pytest-asyncio>=0.21.0
 
+# Text-to-Speech for Duck Voice
+pyttsx3>=2.90
+
 # Optional: Local sentiment model (uncomment if using)
 # transformers>=4.30.0
 # torch>=2.0.0
