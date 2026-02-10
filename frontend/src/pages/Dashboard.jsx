@@ -4,13 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import axios from 'axios';
-import { 
-  ArrowLeft, 
-  ChevronLeft, 
-  ChevronRight, 
-  Star, 
-  Lock, 
-  Trophy, 
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Star,
+  Lock,
+  Trophy,
   Target,
   Zap,
   MapPin,
@@ -41,7 +41,7 @@ const getRatingColor = (rating) => {
 const StatCard = ({ icon: Icon, label, userValue, idolValue, comparison }) => {
   const userColor = getRatingColor(typeof userValue === 'number' && label.includes('Rating') ? userValue : null);
   const idolColor = getRatingColor(typeof idolValue === 'number' && label.includes('Rating') ? idolValue : null);
-  
+
   return (
     <div className="glass-card p-4 rounded-2xl border border-border hover:border-primary/30 transition-all">
       <div className="flex items-center gap-2 mb-3">
@@ -72,24 +72,23 @@ const StatCard = ({ icon: Icon, label, userValue, idolValue, comparison }) => {
 };
 
 // Problem Node Component
-const ProblemNode = ({ 
-  problem, 
-  index, 
-  isCurrentView, 
-  isLastSolved, 
-  isLocked, 
+const ProblemNode = ({
+  problem,
+  index,
+  isCurrentView,
+  isLastSolved,
+  isLocked,
   isSolved,
   showDetails,
   onSolve
 }) => {
   const ratingColor = getRatingColor(problem?.rating);
   const isUnlocked = !isLocked && !isSolved;
-  
+
   return (
-    <div 
-      className={`relative flex flex-col items-center transition-all duration-500 ${
-        isCurrentView ? 'scale-110 z-10' : 'scale-100'
-      }`}
+    <div
+      className={`relative flex flex-col items-center transition-all duration-500 ${isCurrentView ? 'scale-110 z-10' : 'scale-100'
+        }`}
       style={{ minWidth: '180px' }}
     >
       {/* "You are here" marker */}
@@ -101,47 +100,45 @@ const ProblemNode = ({
           </span>
         </div>
       )}
-      
+
       {/* Lock icon for locked problems */}
       {isLocked && (
         <div className="absolute -top-10 left-1/2 -translate-x-1/2">
           <Lock className="w-6 h-6 text-muted-foreground/50" />
         </div>
       )}
-      
+
       {/* Star Node */}
-      <div 
-        className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${
-          isSolved 
-            ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-[0_0_20px_rgba(34,197,94,0.5)]' 
+      <div
+        className={`relative w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${isSolved
+            ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-[0_0_20px_rgba(34,197,94,0.5)]'
             : isUnlocked
               ? 'bg-gradient-to-br from-primary to-accent shadow-[0_0_20px_rgba(6,182,212,0.5)] animate-pulse'
               : isLocked
                 ? 'bg-muted/50 border-2 border-dashed border-muted-foreground/30'
                 : 'bg-muted/30'
-        }`}
+          }`}
       >
-        <Star 
-          className={`w-7 h-7 ${
-            isSolved 
-              ? 'text-white fill-white' 
-              : isUnlocked 
-                ? 'text-white fill-white/50' 
+        <Star
+          className={`w-7 h-7 ${isSolved
+              ? 'text-white fill-white'
+              : isUnlocked
+                ? 'text-white fill-white/50'
                 : 'text-muted-foreground/50'
-          }`} 
+            }`}
         />
         {isSolved && (
           <div className="absolute inset-0 rounded-full animate-ping bg-green-500/30"></div>
         )}
       </div>
-      
+
       {/* Current view indicator (triangle) */}
       {isCurrentView && (
         <div className="mt-2">
           <div className="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[10px] border-b-primary rotate-180"></div>
         </div>
       )}
-      
+
       {/* Problem details */}
       {showDetails && (
         <div className={`mt-4 text-center space-y-2 transition-opacity duration-300 ${isLocked ? 'opacity-40' : 'opacity-100'}`}>
@@ -149,12 +146,12 @@ const ProblemNode = ({
           <p className={`text-sm font-mono ${isCurrentView ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
             P#{problem?.problemId || '—'}
           </p>
-          
+
           {/* Problem Name */}
           <p className={`text-sm font-medium ${isLocked ? 'text-muted-foreground' : 'text-foreground'} line-clamp-2 max-w-[160px]`}>
             {problem?.name || 'Unknown'}
           </p>
-          
+
           {/* Extended details for current view */}
           {isCurrentView && (
             <div className="space-y-2 mt-3">
@@ -171,7 +168,7 @@ const ProblemNode = ({
                   </span>
                 )}
               </div>
-              
+
               {/* Difficulty */}
               <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${ratingColor.bg} ${ratingColor.border} border`}>
                 <Target className={`w-3 h-3 ${ratingColor.text}`} />
@@ -179,14 +176,14 @@ const ProblemNode = ({
                   {problem?.rating || '?'}
                 </span>
               </div>
-              
+
               {/* Idol's rating when solved */}
               {problem?.ratingAtSolve && (
                 <p className="text-xs text-muted-foreground">
                   Idol's rating: <span className={getRatingColor(problem.ratingAtSolve).text}>{problem.ratingAtSolve}</span>
                 </p>
               )}
-              
+
               {/* Rank boost indicator */}
               {problem?.wasContestSolve && (
                 <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/30">
@@ -207,7 +204,7 @@ export const Dashboard = () => {
   const { handle: idolHandle } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading, selectIdol } = useAuth();
-  
+
   // State
   const [comparison, setComparison] = useState(null);
   const [journey, setJourney] = useState({ problems: [], totalProblems: 0, hasMore: false });
@@ -218,10 +215,10 @@ export const Dashboard = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const constellationRef = useRef(null);
-  
+
   const LIMIT = 100;
   const VISIBLE_NODES = 5;
-  
+
   // Check if user is logged in (wait for auth to finish loading)
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
@@ -229,13 +226,13 @@ export const Dashboard = () => {
       navigate('/login', { state: { returnTo: `/dashboard/${idolHandle}` } });
     }
   }, [isAuthenticated, isAuthLoading, navigate, idolHandle]);
-  
+
   // Fetch comparison data
   useEffect(() => {
     const fetchComparison = async () => {
       // Wait for auth to load and user to be available
       if (isAuthLoading || !user?.handle || !idolHandle) return;
-      
+
       setIsLoadingComparison(true);
       try {
         const response = await axios.get(`${BACKEND_URL}/api/compare/${user.handle}/${idolHandle}`);
@@ -248,15 +245,15 @@ export const Dashboard = () => {
         setIsLoadingComparison(false);
       }
     };
-    
+
     fetchComparison();
   }, [isAuthLoading, user?.handle, idolHandle, selectIdol]);
-  
+
   // Fetch idol's journey
   useEffect(() => {
     const fetchJourney = async () => {
       if (!idolHandle) return;
-      
+
       setIsLoadingJourney(true);
       try {
         const response = await axios.get(`${BACKEND_URL}/api/idol/${idolHandle}/journey`, {
@@ -271,15 +268,15 @@ export const Dashboard = () => {
         setIsLoadingJourney(false);
       }
     };
-    
+
     fetchJourney();
   }, [idolHandle]);
-  
+
   // Fetch user's solved problems
   useEffect(() => {
     const fetchUserSolved = async () => {
       if (!user?.handle) return;
-      
+
       try {
         const response = await axios.get(`${BACKEND_URL}/api/user/${user.handle}/solved-problems`);
         setUserSolvedProblems(new Set(response.data.solvedProblems));
@@ -287,10 +284,10 @@ export const Dashboard = () => {
         console.error('Error fetching user solved problems:', error);
       }
     };
-    
+
     fetchUserSolved();
   }, [user?.handle]);
-  
+
   // Find the last solved problem index (following journey order)
   const findLastSolvedIndex = useCallback(() => {
     let lastSolved = -1;
@@ -304,33 +301,33 @@ export const Dashboard = () => {
     }
     return lastSolved;
   }, [journey.problems, userSolvedProblems]);
-  
+
   // Calculate unlocked problems (3 after last solved, maintaining order)
   const getUnlockedIndices = useCallback(() => {
     const lastSolved = findLastSolvedIndex();
     const unlocked = new Set();
     let count = 0;
-    
+
     for (let i = lastSolved + 1; i < journey.problems.length && count < 3; i++) {
       if (!userSolvedProblems.has(journey.problems[i].problemId)) {
         unlocked.add(i);
         count++;
       }
     }
-    
+
     return unlocked;
   }, [journey.problems, userSolvedProblems, findLastSolvedIndex]);
-  
+
   // Load more problems
   const loadMore = async () => {
     if (!journey.hasMore || isLoadingMore) return;
-    
+
     setIsLoadingMore(true);
     try {
       const response = await axios.get(`${BACKEND_URL}/api/idol/${idolHandle}/journey`, {
         params: { offset, limit: LIMIT }
       });
-      
+
       setJourney(prev => ({
         problems: [...prev.problems, ...response.data.problems],
         totalProblems: response.data.totalProblems,
@@ -343,31 +340,31 @@ export const Dashboard = () => {
       setIsLoadingMore(false);
     }
   };
-  
+
   // Navigation handlers
   const navigateLeft = () => {
     if (currentViewIndex > 0) {
       setCurrentViewIndex(prev => Math.max(0, prev - 1));
     }
   };
-  
+
   const navigateRight = async () => {
     if (currentViewIndex < journey.problems.length - 1) {
       setCurrentViewIndex(prev => prev + 1);
-      
+
       // Load more if approaching end
       if (currentViewIndex >= journey.problems.length - 5 && journey.hasMore) {
         await loadMore();
       }
     }
   };
-  
+
   // Handle solve button click
   const handleSolve = (problem) => {
     // Navigate to workspace page
     navigate(`/workspace/${problem.contestId}/${problem.index}`);
   };
-  
+
   // Initialize current view to last solved + 1 or first problem
   useEffect(() => {
     if (journey.problems.length > 0 && userSolvedProblems.size > 0) {
@@ -375,23 +372,23 @@ export const Dashboard = () => {
       setCurrentViewIndex(Math.min(lastSolved + 1, journey.problems.length - 1));
     }
   }, [journey.problems.length, userSolvedProblems, findLastSolvedIndex]);
-  
+
   // Calculate visible problems for constellation
   const visibleStart = Math.max(0, currentViewIndex - Math.floor(VISIBLE_NODES / 2));
   const visibleEnd = Math.min(journey.problems.length, visibleStart + VISIBLE_NODES);
   const visibleProblems = journey.problems.slice(visibleStart, visibleEnd);
-  
+
   const lastSolvedIndex = findLastSolvedIndex();
   const unlockedIndices = getUnlockedIndices();
-  
+
   // Progress calculations
   const progressPercent = comparison?.progressPercent || 0;
   const isAhead = comparison?.userAhead || false;
   const idolRank = comparison?.idol?.rank || 'Unknown';
-  
+
   // Check if comparison data is loaded (not just !isLoadingComparison)
   const comparisonLoaded = !isLoadingComparison && comparison !== null;
-  
+
   // Show loading if auth is still loading
   if (isAuthLoading) {
     return (
@@ -403,24 +400,17 @@ export const Dashboard = () => {
       </section>
     );
   }
-  
+
   if (!isAuthenticated) {
     return null;
   }
-  
+
   return (
     <section className="relative min-h-screen overflow-hidden">
       {/* Background */}
       <div className="absolute inset-0 grid-pattern opacity-30"></div>
       <div className="absolute inset-0 hero-pattern"></div>
-      <div 
-        className="absolute inset-0 opacity-5"
-        style={{
-          backgroundImage: 'url(https://static.prod-images.emergentagent.com/jobs/6100a3e9-50bd-415e-b52f-278e95a062af/images/71b7ee53dbcb65c9a063c355a5bb8e84ec9d2c333281422177e917d3926a5bae.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      ></div>
+      <div className="absolute inset-0 opacity-5"></div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Button */}
@@ -459,28 +449,28 @@ export const Dashboard = () => {
 
         {/* Stats Comparison */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-16">
-          <StatCard 
+          <StatCard
             icon={TrendingUp}
             label="Current Rating"
             userValue={comparison?.user?.rating}
             idolValue={comparison?.idol?.rating}
             comparison={(comparison?.user?.rating || 0) - (comparison?.idol?.rating || 0)}
           />
-          <StatCard 
+          <StatCard
             icon={Award}
             label="Max Rating"
             userValue={comparison?.user?.maxRating}
             idolValue={comparison?.idol?.maxRating}
             comparison={(comparison?.user?.maxRating || 0) - (comparison?.idol?.maxRating || 0)}
           />
-          <StatCard 
+          <StatCard
             icon={Code2}
             label="Problems Solved"
             userValue={comparison?.user?.problemsSolved}
             idolValue={comparison?.idol?.problemsSolved}
             comparison={(comparison?.user?.problemsSolved || 0) - (comparison?.idol?.problemsSolved || 0)}
           />
-          <StatCard 
+          <StatCard
             icon={Trophy}
             label="Contest Wins"
             userValue={comparison?.user?.contestWins}
@@ -517,27 +507,26 @@ export const Dashboard = () => {
               <button
                 onClick={navigateLeft}
                 disabled={currentViewIndex === 0}
-                className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full glass-card border border-border transition-all ${
-                  currentViewIndex === 0 
-                    ? 'opacity-30 cursor-not-allowed' 
+                className={`absolute left-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full glass-card border border-border transition-all ${currentViewIndex === 0
+                    ? 'opacity-30 cursor-not-allowed'
                     : 'hover:border-primary hover:bg-primary/10 cursor-pointer'
-                }`}
+                  }`}
               >
                 <ChevronLeft className="w-6 h-6 text-primary" />
               </button>
 
               {/* Constellation Container */}
-              <div 
+              <div
                 ref={constellationRef}
                 className="relative overflow-hidden mx-16 py-8"
               >
                 {/* Connection Line */}
                 <div className="absolute top-[50%] left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent transform -translate-y-1/2"></div>
-                
+
                 {/* Nodes */}
-                <div 
+                <div
                   className="flex items-center justify-center gap-4 transition-transform duration-500 ease-out"
-                  style={{ 
+                  style={{
                     minHeight: '320px',
                   }}
                 >
@@ -549,7 +538,7 @@ export const Dashboard = () => {
                     const isCurrentView = globalIndex === currentViewIndex;
                     const isLastSolved = globalIndex === lastSolvedIndex;
                     const showDetails = Math.abs(globalIndex - currentViewIndex) <= 1;
-                    
+
                     return (
                       <ProblemNode
                         key={problem.problemId}
@@ -571,11 +560,10 @@ export const Dashboard = () => {
               <button
                 onClick={navigateRight}
                 disabled={currentViewIndex >= journey.problems.length - 1 && !journey.hasMore}
-                className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full glass-card border border-border transition-all ${
-                  currentViewIndex >= journey.problems.length - 1 && !journey.hasMore
-                    ? 'opacity-30 cursor-not-allowed' 
+                className={`absolute right-0 top-1/2 -translate-y-1/2 z-20 w-12 h-12 flex items-center justify-center rounded-full glass-card border border-border transition-all ${currentViewIndex >= journey.problems.length - 1 && !journey.hasMore
+                    ? 'opacity-30 cursor-not-allowed'
                     : 'hover:border-primary hover:bg-primary/10 cursor-pointer'
-                }`}
+                  }`}
               >
                 <ChevronRight className="w-6 h-6 text-primary" />
               </button>
@@ -590,7 +578,7 @@ export const Dashboard = () => {
                 const isSolved = userSolvedProblems.has(currentProblem.problemId);
                 const isUnlocked = unlockedIndices.has(currentViewIndex);
                 const isLocked = !isSolved && !isUnlocked && currentViewIndex > lastSolvedIndex + 3;
-                
+
                 if (isSolved) {
                   return (
                     <div className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-green-500/20 border border-green-500/30 text-green-400">
@@ -599,7 +587,7 @@ export const Dashboard = () => {
                     </div>
                   );
                 }
-                
+
                 if (isLocked) {
                   return (
                     <div className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-muted/50 border border-muted-foreground/30 text-muted-foreground">
@@ -608,7 +596,7 @@ export const Dashboard = () => {
                     </div>
                   );
                 }
-                
+
                 return (
                   <Button
                     onClick={() => handleSolve(currentProblem)}

@@ -87,7 +87,7 @@ export const HeroSection = () => {
     setShowConfirmModal(false);
     selectIdol(selectedCoder.handle, selectedCoder);
     toast.success(`${selectedCoder.handle} selected as your coding idol!`);
-    
+
     // If user is logged in, go to dashboard; otherwise go to login first
     if (isAuthenticated) {
       navigate(`/dashboard/${selectedCoder.handle}`);
@@ -112,16 +112,8 @@ export const HeroSection = () => {
       {/* Background Pattern */}
       <div className="absolute inset-0 grid-pattern opacity-30"></div>
       <div className="absolute inset-0 hero-pattern"></div>
-      
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 opacity-10"
-        style={{
-          backgroundImage: 'url(https://static.prod-images.emergentagent.com/jobs/6100a3e9-50bd-415e-b52f-278e95a062af/images/71b7ee53dbcb65c9a063c355a5bb8e84ec9d2c333281422177e917d3926a5bae.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      ></div>
+
+      <div className="absolute inset-0 opacity-10"></div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -143,12 +135,12 @@ export const HeroSection = () => {
 
             {/* Subheading */}
             <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto lg:mx-0 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
-              Track, analyze, and learn from the best competitive programmers on Codeforces. 
+              Track, analyze, and learn from the best competitive programmers on Codeforces.
               Stay updated with their contests, rankings, and achievements.
             </p>
 
             {/* Search Bar */}
-            <form 
+            <form
               onSubmit={handleSearch}
               className="max-w-xl mx-auto lg:mx-0 animate-in fade-in slide-in-from-bottom-10 duration-700 delay-450"
             >
@@ -163,7 +155,7 @@ export const HeroSection = () => {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 text-foreground placeholder:text-muted-foreground px-4"
                   />
-                  <Button 
+                  <Button
                     type="submit"
                     className="bg-gradient-to-r from-primary to-accent hover:shadow-[0_0_30px_rgba(6,182,212,0.5)] hover:scale-105 transition-all rounded-xl"
                   >
@@ -240,17 +232,28 @@ export const HeroSection = () => {
           <div className="flex justify-center lg:justify-end animate-in fade-in slide-in-from-right duration-1000 delay-300">
             <div className="relative">
               {/* Glow Effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/30 to-accent/30 blur-3xl rounded-full scale-150"></div>
-              
-              {/* Mascot */}
+
+
+              {/* Duck Mascot */}
               <div className="relative animate-float">
-                <img
-                  src="https://static.prod-images.emergentagent.com/jobs/6100a3e9-50bd-415e-b52f-278e95a062af/images/a97cbcef4f6b4fec35bee68ae3b79a5e9d0324a1db31bac16216f84e8e7c4aff.png"
-                  alt="Idolcode Duck Mascot with CP on visor"
-                  className="w-64 sm:w-80 lg:w-96 h-auto drop-shadow-2xl relative z-10"
-                  style={{ mixBlendMode: 'normal' }}
-                />
+                <svg viewBox="0 0 200 200" className="w-64 sm:w-80 lg:w-96 h-auto drop-shadow-2xl relative z-10">
+                  {/* Duck body */}
+                  <ellipse cx="100" cy="120" rx="60" ry="50" fill="#f0f0f0" opacity="0.9" />
+                  {/* Duck head */}
+                  <circle cx="100" cy="70" r="40" fill="#f0f0f0" opacity="0.9" />
+                  {/* Beak */}
+                  <ellipse cx="130" cy="76" rx="20" ry="10" fill="#f97316" />
+                  {/* Eye */}
+                  <circle cx="110" cy="64" r="8" fill="#1e293b" />
+                  <circle cx="112" cy="62" r="3" fill="white" />
+                  {/* Wing */}
+                  <ellipse cx="80" cy="120" rx="24" ry="30" fill="#f0f0f0" opacity="0.7" />
+                  {/* CP Visor */}
+                  <rect x="70" y="50" width="60" height="10" fill="#06b6d4" rx="2" />
+                  <text x="100" y="58" fontSize="8" fill="white" fontWeight="bold" textAnchor="middle">CP</text>
+                </svg>
               </div>
+
 
               {/* Floating Elements */}
               <div className="absolute -top-8 -right-8 w-20 h-20 bg-primary/20 rounded-full blur-2xl animate-pulse"></div>

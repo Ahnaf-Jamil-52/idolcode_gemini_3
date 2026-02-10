@@ -126,9 +126,9 @@ const TIMER_PRESETS = [
 const DuckMascot = ({ mode, isAnimated }) => {
   const duckColor = mode === 'white' ? '#f0f0f0' : mode === 'blue' ? '#3b82f6' : '#ef4444';
   const glowColor = mode === 'white' ? 'rgba(240,240,240,0.3)' : mode === 'blue' ? 'rgba(59,130,246,0.5)' : 'rgba(239,68,68,0.5)';
-  
+
   return (
-    <div 
+    <div
       className={`relative transition-all duration-500 ${isAnimated ? 'animate-float' : ''}`}
       style={{ filter: `drop-shadow(0 0 20px ${glowColor})` }}
     >
@@ -164,153 +164,65 @@ const DuckMascot = ({ mode, isAnimated }) => {
   );
 };
 
-// DSA Visualizer Placeholder
-const DSAVisualizer = ({ isLocked }) => {
-  const [activeStructure, setActiveStructure] = useState('array');
-  
-  const structures = [
-    { id: 'array', name: 'Array', icon: '[]' },
-    { id: 'stack', name: 'Stack', icon: '⊥' },
-    { id: 'tree', name: 'Tree', icon: '🌳' },
-  ];
-  
-  if (isLocked) {
-    return (
-      <div className="h-full flex items-center justify-center text-muted-foreground">
-        <Lock className="w-8 h-8 mr-2" />
-        <span>Visualizer locked in Battle mode</span>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="h-full flex flex-col p-4">
-      <div className="flex gap-2 mb-4">
-        {structures.map((s) => (
-          <button
-            key={s.id}
-            onClick={() => setActiveStructure(s.id)}
-            className={`px-3 py-1 rounded-lg text-sm transition-all ${
-              activeStructure === s.id
-                ? 'bg-primary/20 text-primary border border-primary/30'
-                : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            {s.icon} {s.name}
-          </button>
-        ))}
-      </div>
-      
-      <div className="flex-1 flex items-center justify-center">
-        {activeStructure === 'array' && (
-          <div className="flex gap-1">
-            {[3, 7, 1, 9, 4, 2].map((val, i) => (
-              <div
-                key={i}
-                className="w-10 h-10 flex items-center justify-center rounded-lg bg-primary/20 border border-primary/30 text-primary font-mono text-sm animate-pulse"
-                style={{ animationDelay: `${i * 0.1}s` }}
-              >
-                {val}
-              </div>
-            ))}
-          </div>
-        )}
-        {activeStructure === 'stack' && (
-          <div className="flex flex-col-reverse gap-1">
-            {[5, 3, 8].map((val, i) => (
-              <div
-                key={i}
-                className="w-16 h-8 flex items-center justify-center rounded-lg bg-accent/20 border border-accent/30 text-accent font-mono text-sm"
-              >
-                {val}
-              </div>
-            ))}
-            <div className="text-xs text-muted-foreground mt-2">↑ TOP</div>
-          </div>
-        )}
-        {activeStructure === 'tree' && (
-          <div className="flex flex-col items-center">
-            <div className="w-10 h-10 flex items-center justify-center rounded-full bg-green-500/20 border border-green-500/30 text-green-400 font-mono text-sm">
-              5
-            </div>
-            <div className="flex gap-8 mt-2">
-              <div className="flex flex-col items-center">
-                <div className="w-1 h-4 bg-green-500/30"></div>
-                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-green-500/20 border border-green-500/30 text-green-400 font-mono text-xs">
-                  3
-                </div>
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="w-1 h-4 bg-green-500/30"></div>
-                <div className="w-8 h-8 flex items-center justify-center rounded-full bg-green-500/20 border border-green-500/30 text-green-400 font-mono text-xs">
-                  7
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      
-      <p className="text-xs text-muted-foreground text-center mt-2">
-        Visualizer shows data structures from your code
-      </p>
-    </div>
-  );
-};
+
 
 // Main Workspace Component
 export const Workspace = () => {
   const { contestId, problemIndex } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  
+
   // Problem state
   const [problem, setProblem] = useState(null);
   const [isLoadingProblem, setIsLoadingProblem] = useState(true);
-  
+
   // UI state
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [zenMode, setZenMode] = useState(false);
   const [currentMode, setCurrentMode] = useState('white'); // white, blue, red
-  
+  const [leftPanelWidth, setLeftPanelWidth] = useState(320); // 320px = w-80
+  const [rightPanelWidth, setRightPanelWidth] = useState(384); // 384px = w-96
+  const [isResizingLeft, setIsResizingLeft] = useState(false);
+  const [isResizingRight, setIsResizingRight] = useState(false);
+
   // Timer state
   const [timerMinutes, setTimerMinutes] = useState(30);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerActive, setTimerActive] = useState(false);
   const [showTimerDropdown, setShowTimerDropdown] = useState(false);
   const timerRef = useRef(null);
-  
+
   // Editor state
   const [files, setFiles] = useState([
     { id: '1', name: 'solution', language: 'python', content: DEFAULT_CODE.python }
   ]);
   const [activeFileId, setActiveFileId] = useState('1');
   const editorRef = useRef(null);
-  
+
   // Terminal state
   const [terminalOutput, setTerminalOutput] = useState([
     { type: 'info', message: 'Ready to run your code...' }
   ]);
   const [isRunning, setIsRunning] = useState(false);
-  
+
   // Chat state
   const [chatMessages, setChatMessages] = useState([
     { role: 'assistant', content: "Hey there! 🦆 I'm your coding duck. How can I help you solve this problem?" }
   ]);
   const [chatInput, setChatInput] = useState('');
   const chatScrollRef = useRef(null);
-  
+
   // Submit dialog state
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
-  
+
   // Get active file
   const activeFile = files.find(f => f.id === activeFileId) || files[0];
-  
+
   // Fetch problem content
   useEffect(() => {
     const fetchProblem = async () => {
       if (!contestId || !problemIndex) return;
-      
+
       setIsLoadingProblem(true);
       try {
         const response = await axios.get(`${BACKEND_URL}/api/problem/${contestId}/${problemIndex}`);
@@ -322,10 +234,10 @@ export const Workspace = () => {
         setIsLoadingProblem(false);
       }
     };
-    
+
     fetchProblem();
   }, [contestId, problemIndex]);
-  
+
   // Timer effect
   useEffect(() => {
     if (timerActive && currentMode === 'red') {
@@ -347,19 +259,52 @@ export const Workspace = () => {
         });
       }, 1000);
     }
-    
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [timerActive, currentMode]);
-  
+
   // Scroll chat to bottom
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [chatMessages]);
-  
+
+  // Handle panel resizing
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isResizingLeft) {
+        const newWidth = Math.max(200, Math.min(600, e.clientX));
+        setLeftPanelWidth(newWidth);
+      }
+      if (isResizingRight) {
+        const newWidth = Math.max(200, Math.min(600, window.innerWidth - e.clientX));
+        setRightPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingLeft(false);
+      setIsResizingRight(false);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    if (isResizingLeft || isResizingRight) {
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingLeft, isResizingRight]);
+
   // Handle mode change
   const handleModeChange = (mode) => {
     setCurrentMode(mode);
@@ -371,7 +316,7 @@ export const Workspace = () => {
       if (timerRef.current) clearInterval(timerRef.current);
     }
   };
-  
+
   // Start timer
   const startTimer = (minutes) => {
     setTimerMinutes(minutes);
@@ -380,11 +325,11 @@ export const Workspace = () => {
     setShowTimerDropdown(false);
     toast.success(`Battle mode activated! ${minutes} minutes on the clock.`);
   };
-  
+
   // Handle editor mount
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
-    
+
     // Set dark theme
     monaco.editor.defineTheme('idolcode-dark', {
       base: 'vs-dark',
@@ -400,14 +345,14 @@ export const Workspace = () => {
     });
     monaco.editor.setTheme('idolcode-dark');
   };
-  
+
   // Handle code change
   const handleCodeChange = (value) => {
-    setFiles(files.map(f => 
+    setFiles(files.map(f =>
       f.id === activeFileId ? { ...f, content: value } : f
     ));
   };
-  
+
   // Add new file
   const addNewFile = () => {
     const newId = String(Date.now());
@@ -420,16 +365,16 @@ export const Workspace = () => {
     setFiles([...files, newFile]);
     setActiveFileId(newId);
   };
-  
+
   // Change file language
   const changeFileLanguage = (fileId, language) => {
-    setFiles(files.map(f => 
-      f.id === fileId 
+    setFiles(files.map(f =>
+      f.id === fileId
         ? { ...f, language, content: DEFAULT_CODE[language] }
         : f
     ));
   };
-  
+
   // Close file
   const closeFile = (fileId) => {
     if (files.length === 1) {
@@ -442,12 +387,12 @@ export const Workspace = () => {
       setActiveFileId(newFiles[0].id);
     }
   };
-  
+
   // Mock run code
   const runCode = () => {
     setIsRunning(true);
     setTerminalOutput([{ type: 'info', message: '▶ Running code...' }]);
-    
+
     setTimeout(() => {
       setTerminalOutput(prev => [
         ...prev,
@@ -457,17 +402,17 @@ export const Workspace = () => {
       setIsRunning(false);
     }, 1500);
   };
-  
+
   // Mock test code
   const testCode = () => {
     if (!problem?.examples?.length) {
       toast.error('No test cases available');
       return;
     }
-    
+
     setIsRunning(true);
     setTerminalOutput([{ type: 'info', message: '▶ Running tests...' }]);
-    
+
     // Simulate test execution
     let delay = 500;
     problem.examples.forEach((example, index) => {
@@ -475,80 +420,80 @@ export const Workspace = () => {
         const passed = Math.random() > 0.3; // Random pass/fail for mock
         setTerminalOutput(prev => [
           ...prev,
-          { 
-            type: passed ? 'success' : 'error', 
-            message: `Test ${index + 1}: ${passed ? '✓ PASSED' : '✗ WRONG ANSWER'}\n  Input: ${example.input.substring(0, 50)}...\n  Expected: ${example.output.substring(0, 30)}...${passed ? '' : '\n  Got: (different output)'}` 
+          {
+            type: passed ? 'success' : 'error',
+            message: `Test ${index + 1}: ${passed ? '✓ PASSED' : '✗ WRONG ANSWER'}\n  Input: ${example.input.substring(0, 50)}...\n  Expected: ${example.output.substring(0, 30)}...${passed ? '' : '\n  Got: (different output)'}`
           }
         ]);
       }, delay);
       delay += 800;
     });
-    
+
     setTimeout(() => {
       const allPassed = Math.random() > 0.5;
       setTerminalOutput(prev => [
         ...prev,
-        { 
-          type: allPassed ? 'success' : 'error', 
-          message: allPassed 
-            ? '═══════════════════════════════\n  ALL TESTS PASSED! ✓\n═══════════════════════════════' 
+        {
+          type: allPassed ? 'success' : 'error',
+          message: allPassed
+            ? '═══════════════════════════════\n  ALL TESTS PASSED! ✓\n═══════════════════════════════'
             : '═══════════════════════════════\n  SOME TESTS FAILED ✗\n═══════════════════════════════'
         }
       ]);
       setIsRunning(false);
     }, delay + 500);
   };
-  
+
   // Handle chat submit
   const handleChatSubmit = (e) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-    
+
     if (currentMode === 'red') {
       toast.error('Chat is locked in Battle mode!');
       return;
     }
-    
+
     const userMessage = chatInput.trim();
     setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
     setChatInput('');
-    
+
     // Mock AI response
     setTimeout(() => {
-      const responses = currentMode === 'blue' 
+      const responses = currentMode === 'blue'
         ? [
-            "Great question! 🦆 Let me help you think through this...",
-            "Have you considered using a greedy approach here?",
-            "Try thinking about the edge cases first!",
-            "What's the time complexity you're aiming for?",
-          ]
+          "Great question! 🦆 Let me help you think through this...",
+          "Have you considered using a greedy approach here?",
+          "Try thinking about the edge cases first!",
+          "What's the time complexity you're aiming for?",
+        ]
         : [
-            "Quack! 🦆 That's an interesting approach!",
-            "Keep going, you're on the right track!",
-            "Have you tried debugging with smaller inputs?",
-          ];
-      
-      setChatMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: responses[Math.floor(Math.random() * responses.length)] 
+          "Quack! 🦆 That's an interesting approach!",
+          "Keep going, you're on the right track!",
+          "Have you tried debugging with smaller inputs?",
+        ];
+
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: responses[Math.floor(Math.random() * responses.length)]
       }]);
     }, 1000);
   };
-  
+
   // Handle submit
   const handleSubmit = () => {
     setShowSubmitDialog(true);
   };
-  
+
   const confirmSubmit = (alsoToCodeforces) => {
     setShowSubmitDialog(false);
     toast.success('Solution submitted!');
-    
+
     if (alsoToCodeforces && problem?.url) {
       window.open(problem.url, '_blank');
     }
   };
-  
+
   // Loading state
   if (isAuthLoading) {
     return (
@@ -557,7 +502,7 @@ export const Workspace = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden">
       {/* Top Navigation Bar */}
@@ -576,7 +521,7 @@ export const Workspace = () => {
             Problem: <span className="text-primary font-mono">{contestId}{problemIndex}</span>
           </span>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {/* Timer (visible only in red mode) */}
           {currentMode === 'red' && (
@@ -604,7 +549,7 @@ export const Workspace = () => {
               )}
             </div>
           )}
-          
+
           {/* Zen Mode Button */}
           <Button
             variant="ghost"
@@ -614,7 +559,7 @@ export const Workspace = () => {
           >
             <Moon className="w-4 h-4" />
           </Button>
-          
+
           {/* Run Button */}
           <Button
             variant="ghost"
@@ -626,7 +571,7 @@ export const Workspace = () => {
             <Play className="w-4 h-4 mr-1" />
             Run
           </Button>
-          
+
           {/* Test Button */}
           <Button
             variant="ghost"
@@ -640,15 +585,18 @@ export const Workspace = () => {
           </Button>
         </div>
       </div>
-      
+
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Problem & Visualizer */}
         {!zenMode && (
-          <div 
-            className={`border-r border-border flex flex-col transition-all duration-300 ${
-              leftPanelCollapsed ? 'w-0 overflow-hidden' : 'w-80'
-            }`}
+          <div
+            className="border-r border-border flex flex-col"
+            style={{
+              width: leftPanelCollapsed ? 0 : `${leftPanelWidth}px`,
+              overflow: leftPanelCollapsed ? 'hidden' : 'visible',
+              transition: leftPanelCollapsed ? 'width 0.3s' : 'none'
+            }}
           >
             {/* Problem Description */}
             <div className="flex-1 flex flex-col min-h-0">
@@ -657,17 +605,17 @@ export const Workspace = () => {
                   <FileCode className="w-4 h-4 text-primary" />
                   Problem
                 </span>
-                <a 
-                  href={problem?.url} 
-                  target="_blank" 
+                <a
+                  href={problem?.url}
+                  target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary transition-all text-sm font-medium border border-primary/20 hover:border-primary/30"
                 >
-                  <ExternalLink className="w-3 h-3" />
-                  Codeforces
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  View on Codeforces
                 </a>
               </div>
-              
+
               <ScrollArea className="flex-1">
                 {isLoadingProblem ? (
                   <div className="flex items-center justify-center h-full">
@@ -689,7 +637,7 @@ export const Workspace = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     {problem.tags?.length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {problem.tags.map((tag, i) => (
@@ -699,24 +647,24 @@ export const Workspace = () => {
                         ))}
                       </div>
                     )}
-                    
+
                     <div className="prose prose-sm prose-invert max-w-none">
-                      <p className="text-muted-foreground whitespace-pre-wrap">{problem.problemStatement}</p>
-                      
+                      <p className="text-muted-foreground">{problem.problemStatement}</p>
+
                       {problem.inputSpecification && (
                         <div className="mt-4">
                           <h4 className="text-sm font-semibold text-foreground">Input</h4>
-                          <p className="text-muted-foreground whitespace-pre-wrap">{problem.inputSpecification}</p>
+                          <p className="text-muted-foreground">{problem.inputSpecification}</p>
                         </div>
                       )}
-                      
+
                       {problem.outputSpecification && (
                         <div className="mt-4">
                           <h4 className="text-sm font-semibold text-foreground">Output</h4>
-                          <p className="text-muted-foreground whitespace-pre-wrap">{problem.outputSpecification}</p>
+                          <p className="text-muted-foreground">{problem.outputSpecification}</p>
                         </div>
                       )}
-                      
+
                       {problem.examples?.length > 0 && (
                         <div className="mt-4">
                           <h4 className="text-sm font-semibold text-foreground mb-2">Examples</h4>
@@ -738,11 +686,11 @@ export const Workspace = () => {
                           ))}
                         </div>
                       )}
-                      
+
                       {problem.note && (
                         <div className="mt-4">
                           <h4 className="text-sm font-semibold text-foreground">Note</h4>
-                          <p className="text-muted-foreground whitespace-pre-wrap">{problem.note}</p>
+                          <p className="text-muted-foreground">{problem.note}</p>
                         </div>
                       )}
                     </div>
@@ -754,17 +702,20 @@ export const Workspace = () => {
                 )}
               </ScrollArea>
             </div>
-            
-            {/* DSA Visualizer */}
-            <div className="h-48 border-t border-border">
-              <div className="h-8 bg-card/50 border-b border-border flex items-center px-3">
-                <span className="text-xs font-medium text-muted-foreground">DSA Visualizer</span>
-              </div>
-              <DSAVisualizer isLocked={currentMode === 'red'} />
-            </div>
           </div>
         )}
-        
+
+        {/* Resize Handle for Left Panel */}
+        {!zenMode && !leftPanelCollapsed && (
+          <div
+            onMouseDown={() => setIsResizingLeft(true)}
+            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors flex items-center justify-center group relative"
+          >
+            <div className="absolute w-4 h-full" /> {/* Wider hit area */}
+            <div className="w-0.5 h-8 bg-muted-foreground/30 group-hover:bg-primary/70 rounded-full transition-colors" />
+          </div>
+        )}
+
         {/* Collapse Toggle */}
         {!zenMode && (
           <button
@@ -778,7 +729,7 @@ export const Workspace = () => {
             )}
           </button>
         )}
-        
+
         {/* Middle Panel - Editor & Terminal */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* File Tabs */}
@@ -786,11 +737,10 @@ export const Workspace = () => {
             {files.map((file) => (
               <div
                 key={file.id}
-                className={`group flex items-center gap-2 px-3 py-1.5 rounded-t-lg cursor-pointer transition-all ${
-                  file.id === activeFileId
-                    ? 'bg-background border-t border-l border-r border-border text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }`}
+                className={`group flex items-center gap-2 px-3 py-1.5 rounded-t-lg cursor-pointer transition-all ${file.id === activeFileId
+                  ? 'bg-background border-t border-l border-r border-border text-foreground'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                  }`}
                 onClick={() => setActiveFileId(file.id)}
               >
                 <FileCode className="w-3 h-3" />
@@ -810,7 +760,7 @@ export const Workspace = () => {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 {files.length > 1 && (
-                  <button 
+                  <button
                     className="p-0.5 hover:bg-destructive/20 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => { e.stopPropagation(); closeFile(file.id); }}
                   >
@@ -819,7 +769,7 @@ export const Workspace = () => {
                 )}
               </div>
             ))}
-            
+
             {/* Add File Button */}
             <button
               onClick={addNewFile}
@@ -827,7 +777,7 @@ export const Workspace = () => {
             >
               <Plus className="w-4 h-4" />
             </button>
-            
+
             {/* Import Button */}
             <button
               onClick={() => toast.info('Import feature coming soon!')}
@@ -836,7 +786,7 @@ export const Workspace = () => {
               <Upload className="w-4 h-4" />
             </button>
           </div>
-          
+
           {/* Code Editor */}
           <div className="flex-1 min-h-0">
             <Editor
@@ -860,7 +810,7 @@ export const Workspace = () => {
               theme="vs-dark"
             />
           </div>
-          
+
           {/* Terminal */}
           <div className="h-40 border-t border-border flex flex-col">
             <div className="h-8 bg-card/50 border-b border-border flex items-center px-3">
@@ -872,12 +822,11 @@ export const Workspace = () => {
                 {terminalOutput.map((line, i) => (
                   <div
                     key={i}
-                    className={`whitespace-pre-wrap ${
-                      line.type === 'error' ? 'text-red-400' :
+                    className={`whitespace-pre-wrap ${line.type === 'error' ? 'text-red-400' :
                       line.type === 'success' ? 'text-green-400' :
-                      line.type === 'output' ? 'text-blue-300' :
-                      'text-muted-foreground'
-                    }`}
+                        line.type === 'output' ? 'text-blue-300' :
+                          'text-muted-foreground'
+                      }`}
                   >
                     {line.message}
                   </div>
@@ -886,10 +835,24 @@ export const Workspace = () => {
             </ScrollArea>
           </div>
         </div>
-        
+
+        {/* Resize Handle for Right Panel */}
+        {!zenMode && (
+          <div
+            onMouseDown={() => setIsResizingRight(true)}
+            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors flex items-center justify-center group relative"
+          >
+            <div className="absolute w-4 h-full" /> {/* Wider hit area */}
+            <div className="w-0.5 h-8 bg-muted-foreground/30 group-hover:bg-primary/70 rounded-full transition-colors" />
+          </div>
+        )}
+
         {/* Right Panel - Duck & Chat */}
         {!zenMode && (
-          <div className="w-72 border-l border-border flex flex-col">
+          <div
+            className="border-l border-border flex flex-col"
+            style={{ width: `${rightPanelWidth}px` }}
+          >
             {/* Mode Buttons & Duck */}
             <div className="p-4 border-b border-border">
               {/* Mode Buttons */}
@@ -898,11 +861,10 @@ export const Workspace = () => {
                   <button
                     key={key}
                     onClick={() => handleModeChange(key)}
-                    className={`w-10 h-10 rounded-lg transition-all ${mode.color} ${
-                      currentMode === key 
-                        ? 'ring-2 ring-offset-2 ring-offset-background ring-primary shadow-lg scale-110' 
-                        : 'opacity-70 hover:opacity-100'
-                    }`}
+                    className={`w-10 h-10 rounded-lg transition-all ${mode.color} ${currentMode === key
+                      ? 'ring-2 ring-offset-2 ring-offset-background ring-primary shadow-lg scale-110'
+                      : 'opacity-70 hover:opacity-100'
+                      }`}
                     title={mode.description}
                   >
                     {key === 'white' && <span className="text-gray-800">○</span>}
@@ -911,7 +873,7 @@ export const Workspace = () => {
                   </button>
                 ))}
               </div>
-              
+
               {/* Duck Mascot */}
               <div className="flex flex-col items-center">
                 <DuckMascot mode={currentMode} isAnimated={true} />
@@ -920,7 +882,7 @@ export const Workspace = () => {
                 </p>
               </div>
             </div>
-            
+
             {/* Chat Section */}
             <div className="flex-1 flex flex-col min-h-0">
               <div className="h-8 bg-card/50 border-b border-border flex items-center px-3">
@@ -929,7 +891,7 @@ export const Workspace = () => {
                   {currentMode === 'red' ? 'Chat Locked' : 'Duck Chat'}
                 </span>
               </div>
-              
+
               {currentMode === 'red' ? (
                 <div className="flex-1 flex items-center justify-center text-muted-foreground">
                   <Lock className="w-6 h-6 mr-2" />
@@ -945,11 +907,10 @@ export const Workspace = () => {
                           className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                         >
                           <div
-                            className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${
-                              msg.role === 'user'
-                                ? 'bg-primary text-primary-foreground rounded-br-sm'
-                                : 'bg-muted text-foreground rounded-bl-sm'
-                            }`}
+                            className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${msg.role === 'user'
+                              ? 'bg-primary text-primary-foreground rounded-br-sm'
+                              : 'bg-muted text-foreground rounded-bl-sm'
+                              }`}
                           >
                             {msg.content}
                           </div>
@@ -957,7 +918,7 @@ export const Workspace = () => {
                       ))}
                     </div>
                   </ScrollArea>
-                  
+
                   <form onSubmit={handleChatSubmit} className="p-3 border-t border-border">
                     <div className="flex gap-2">
                       <input
@@ -975,7 +936,7 @@ export const Workspace = () => {
                 </>
               )}
             </div>
-            
+
             {/* Submit Button */}
             <div className="p-4 border-t border-border">
               <Button
@@ -989,7 +950,7 @@ export const Workspace = () => {
           </div>
         )}
       </div>
-      
+
       {/* Submit Confirmation Dialog */}
       <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
         <AlertDialogContent className="glass-card border-border">

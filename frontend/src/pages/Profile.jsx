@@ -12,16 +12,8 @@ export const Profile = () => {
       {/* Background Pattern - Same as home page */}
       <div className="absolute inset-0 grid-pattern opacity-30"></div>
       <div className="absolute inset-0 hero-pattern"></div>
-      
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 opacity-10"
-        style={{
-          backgroundImage: 'url(https://static.prod-images.emergentagent.com/jobs/6100a3e9-50bd-415e-b52f-278e95a062af/images/71b7ee53dbcb65c9a063c355a5bb8e84ec9d2c333281422177e917d3926a5bae.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      ></div>
+
+      <div className="absolute inset-0 opacity-10"></div>
 
       <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="glass-card p-8 rounded-3xl border border-border">

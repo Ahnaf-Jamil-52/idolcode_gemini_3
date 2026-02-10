@@ -27,7 +27,7 @@ export const Login = () => {
 
     try {
       const response = await axios.get(`${BACKEND_URL}/api/user/${handle}/info`);
-      
+
       if (response.data) {
         login(handle, response.data);
         toast.success(`Welcome, ${response.data.handle}!`);
@@ -55,16 +55,7 @@ export const Login = () => {
       {/* Background Pattern */}
       <div className="absolute inset-0 grid-pattern opacity-30"></div>
       <div className="absolute inset-0 hero-pattern"></div>
-      
-      {/* Background Image */}
-      <div 
-        className="absolute inset-0 opacity-10"
-        style={{
-          backgroundImage: 'url(https://static.prod-images.emergentagent.com/jobs/6100a3e9-50bd-415e-b52f-278e95a062af/images/71b7ee53dbcb65c9a063c355a5bb8e84ec9d2c333281422177e917d3926a5bae.png)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      ></div>
+      <div className="absolute inset-0 opacity-10"></div>
 
       <div className="relative z-10 w-full max-w-md mx-auto px-4">
         <div className="glass-card p-8 rounded-3xl border border-border">
