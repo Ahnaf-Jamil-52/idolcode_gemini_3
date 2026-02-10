@@ -424,6 +424,10 @@ def cache_curriculum(cache_key: str, recommendations: List[ProblemRecommendation
 async def root():
     return {"message": "IdolCode API"}
 
+@api_router.get("/health")
+async def health():
+    return {"status": "ok"}
+
 
 # ── Auth Models ───────────────────────────────────────────────────────────
 
