@@ -40,6 +40,25 @@ db = client[os.environ.get('DB_NAME', 'test_database')]
 # Create the main app without a prefix
 app = FastAPI()
 
+# CORS configuration - must be added early
+cors_origins_raw = os.environ.get('CORS_ORIGINS', '')
+if cors_origins_raw and cors_origins_raw.strip() != '*':
+    cors_origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
+else:
+    cors_origins = [
+        "https://geminiidolo.vercel.app",
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
@@ -2156,24 +2175,7 @@ async def get_status_checks(
 # Include the router in the main app
 app.include_router(api_router)
 
-cors_origins_raw = os.environ.get('CORS_ORIGINS', '')
-if cors_origins_raw and cors_origins_raw.strip() != '*':
-    cors_origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
-else:
-    cors_origins = [
-        "https://geminiidolo.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:5173",
-        
-    ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=cors_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Configure logging
 logging.basicConfig(
