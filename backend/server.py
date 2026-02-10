@@ -41,20 +41,10 @@ db = client[os.environ.get('DB_NAME', 'test_database')]
 app = FastAPI()
 
 # CORS configuration - must be added early
-cors_origins_raw = os.environ.get('CORS_ORIGINS', '')
-if cors_origins_raw and cors_origins_raw.strip() != '*':
-    cors_origins = [o.strip() for o in cors_origins_raw.split(',') if o.strip()]
-else:
-    cors_origins = [
-        "https://geminiidolo.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:5173",
-    ]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=cors_origins,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
